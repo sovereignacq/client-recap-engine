@@ -19,12 +19,20 @@ export default async function Home() {
 
         <div className="flex flex-col gap-3 sm:flex-row">
           {user ? (
-            <Link
-              href="/dashboard"
-              className="rounded-full bg-black px-6 py-3 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-            >
-              Go to dashboard
-            </Link>
+            <>
+              <Link
+                href="/dashboard"
+                className="rounded-full bg-black px-6 py-3 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+              >
+                Go to dashboard
+              </Link>
+              <Link
+                href="/pricing"
+                className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              >
+                Pricing
+              </Link>
+            </>
           ) : (
             <>
               <Link
@@ -32,6 +40,12 @@ export default async function Home() {
                 className="rounded-full bg-black px-6 py-3 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
               >
                 Get started
+              </Link>
+              <Link
+                href="/pricing"
+                className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              >
+                Pricing
               </Link>
               <Link
                 href="/login"

@@ -5,91 +5,123 @@
 - [x] **Step 1 — Next.js Scaffold**: App Router, TypeScript, Tailwind CSS, ESLint, `src/` directory, `@/*` import alias. ✅
 - [x] **Step 2 — Supabase**: Database + Auth wired up. ✅
 - [x] **Step 3 — Vercel**: Deployment + environment variables. ✅
-- [ ] **Step 4 — Stripe**: Billing integration (not started)
+- [x] **Step 4 — Stripe**: Billing integration (code + DB ready; pending manual product creation). ⚠️
 - [ ] **Step 5 — Resend**: Transactional email setup (not started)
 
 ---
 
-## Step 2 details
+## Step 4 details
 
-**Project:** `cmcjqwlsjxnsxpiofijz` (org: sovereign acquisitions, region: us-west-2, Postgres 17)
-**URL:** `https://cmcjqwlsjxnsxpiofijz.supabase.co`
+### What's been built
 
-### Database schema (migration `init_schema_profiles_clients_recaps`)
+**Database** (migration `add_billing_tables`):
+- `profiles.stripe_customer_id` column added (unique).
+- `subscriptions` table mirroring Stripe state — id, user_id, status, plan, price_id, current_period_*, cancel_at_period_end, trial_*, canceled_at.
+- RLS: users can SELECT only their own subscription rows; INSERT/UPDATE/DELETE are limited to `service_role` (webhook only).
+- View `current_subscription` returning the latest non-canceled subscription per user.
 
-| Table         | Purpose                                                 | RLS |
-| ------------- | ------------------------------------------------------- | --- |
-| `profiles`    | 1:1 with `auth.users`; auto-created via trigger on signup | ✅  |
-| `clients`     | Per-user CRM rows (`owner_id` → `auth.users`)            | ✅  |
-| `recaps`      | Recaps belong to a client; status: draft/sent/archived   | ✅  |
+**Code:**
 
-- `updated_at` is auto-maintained on all three tables via the `public.set_updated_at()` trigger.
-- New auth users automatically get a `profiles` row via `public.handle_new_user()` (fires on `auth.users` insert).
-- RLS policies restrict every row to its `owner_id = auth.uid()`.
-- Hardening migration `harden_security_definer_functions` pinned `set_updated_at` search_path and revoked RPC EXECUTE on `handle_new_user`.
-- Supabase advisors return **0 lints**.
+| Path                                          | Purpose                                                       |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| `src/lib/stripe/server.ts`                    | Lazy Stripe client + price ID helpers + plan key validation   |
+| `src/lib/supabase/admin.ts`                   | Service-role Supabase client (webhook use only)               |
+| `src/app/api/stripe/checkout/route.ts`        | `POST` → creates Checkout Session, returns hosted URL          |
+| `src/app/api/stripe/portal/route.ts`          | `POST` → creates Customer Portal session                       |
+| `src/app/api/stripe/webhook/route.ts`         | `POST` → verifies signature, syncs subscription state to DB    |
+| `src/app/pricing/page.tsx` (+ client buttons) | Public pricing page with Free vs Pro tiers, monthly/annual toggle |
+| `src/app/dashboard/page.tsx`                  | Updated with current-plan card and Upgrade / Manage billing CTA |
 
-### Next.js integration
+**Pricing model:**
+- Free — 1 client, 3 recaps/month (enforced in app logic — TBD)
+- Pro — $29/mo or $290/yr (annual saves ~17%)
+- 14-day free trial on Pro, no card required at signup but card collected at checkout
+- Promotion codes allowed at checkout
 
-- Installed `@supabase/supabase-js` and `@supabase/ssr`.
-- Client helpers:
-  - `src/lib/supabase/client.ts` — browser client (Client Components)
-  - `src/lib/supabase/server.ts` — server client (Server Components, Route Handlers, Server Actions)
-  - `src/lib/supabase/middleware.ts` — `updateSession()` refresh helper
-- `src/proxy.ts` — Next.js 16 proxy (formerly `middleware.ts`) runs on all routes, refreshes auth cookies, and redirects unauthenticated requests to `/login`.
-- Routes:
-  - `/login` + Server Action (`signInWithPassword`)
-  - `/signup` + Server Action (`signUp` with `emailRedirectTo`)
-  - `/auth/callback` route handler (`exchangeCodeForSession`) for email confirmation
-  - `/dashboard` (protected) showing the signed-in user and counts of clients/recaps
+### ⚠️ Manual steps required (only you can do these)
 
-### Auth method
+The Stripe MCP connector uses live-mode credentials; we deliberately did **not** create products via API to keep that account clean. You'll create the products yourself, in test mode.
 
-Email + password. Confirmation emails redirect to `/auth/callback?next=/dashboard`.
+#### 1. Create products + prices in Stripe (test mode)
+
+1. Go to [dashboard.stripe.com/test/products](https://dashboard.stripe.com/test/products) (make sure the top-right toggle says **Test mode**).
+2. Click **+ Add product**:
+   - **Name:** `client-recap-engine Pro`
+   - **Description:** `Unlimited clients and recaps, priority support.`
+3. Under **Pricing**, add two prices on the same product:
+   - **Monthly recurring**, $29.00 USD, lookup key `pro_monthly`
+   - **Yearly recurring**, $290.00 USD, lookup key `pro_annual`
+4. Copy each `price_...` ID — you'll paste them into env vars next.
+
+#### 2. Add Stripe env vars to Vercel
+
+Run these locally (replace placeholders with your actual values):
+
+```bash
+cd client-recap-engine
+# Secret key — from https://dashboard.stripe.com/test/apikeys
+echo "sk_test_..." | npx vercel env add STRIPE_SECRET_KEY production
+echo "sk_test_..." | npx vercel env add STRIPE_SECRET_KEY development
+# Price IDs from step 1
+echo "price_..." | npx vercel env add STRIPE_PRICE_PRO_MONTHLY production
+echo "price_..." | npx vercel env add STRIPE_PRICE_PRO_MONTHLY development
+echo "price_..." | npx vercel env add STRIPE_PRICE_PRO_ANNUAL production
+echo "price_..." | npx vercel env add STRIPE_PRICE_PRO_ANNUAL development
+# Service role key — from https://supabase.com/dashboard/project/cmcjqwlsjxnsxpiofijz/settings/api-keys
+echo "eyJ..." | npx vercel env add SUPABASE_SERVICE_ROLE_KEY production
+echo "eyJ..." | npx vercel env add SUPABASE_SERVICE_ROLE_KEY development
+```
+
+Repeat all of the above for `preview` if you want preview deployments to support billing.
+
+Also add the same values to `.env.local` for local dev.
+
+#### 3. Set up the webhook endpoint
+
+1. Go to [dashboard.stripe.com/test/webhooks](https://dashboard.stripe.com/test/webhooks).
+2. **Add endpoint** → URL: `https://client-recap-engine.vercel.app/api/stripe/webhook`
+3. **Listen to:** select these events:
+   - `checkout.session.completed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+4. After creating, click **Reveal** under Signing secret, copy the `whsec_...` value, and add it to Vercel:
+
+   ```bash
+   echo "whsec_..." | npx vercel env add STRIPE_WEBHOOK_SECRET production
+   ```
+
+5. Redeploy: `npx vercel --prod`
+
+#### 4. Enable the Customer Portal
+
+1. Go to [dashboard.stripe.com/test/settings/billing/portal](https://dashboard.stripe.com/test/settings/billing/portal).
+2. Click **Activate test link**.
+3. Default settings are fine — you can let customers cancel, swap plans, and update payment methods.
+
+#### 5. Test the flow
+
+1. Visit https://client-recap-engine.vercel.app/pricing → log in → click **Start 14-day free trial**.
+2. Use Stripe's test card: **4242 4242 4242 4242**, any future expiry, any CVC, any ZIP.
+3. After successful checkout you should land on `/dashboard?checkout=success` with the Pro plan shown.
+4. Click **Manage billing** to confirm the portal opens.
+
+### Switching to live mode later
+
+When ready to charge real money:
+1. Recreate the same product + prices in live mode at [dashboard.stripe.com/products](https://dashboard.stripe.com/products).
+2. Create a live-mode webhook at the same URL.
+3. Replace the `STRIPE_*` env vars in Vercel production with the `sk_live_...`, live `price_...`, and live `whsec_...` values.
+4. Redeploy.
 
 ---
 
-## Step 3 details
+## Step 1–3 details (collapsed)
 
-**Vercel project:** `client-recap-engine` (team: soverign-acquisitions, id `prj_9LEfRnMj5a0UrCr1mrUCO9JJGcQM`)
+See git history for full details. Short version:
 
-### Live URLs
-
-- **Production:** https://client-recap-engine.vercel.app
-- **Latest deployment:** https://client-recap-engine-g59qap4g4-soverign-acquisitions.vercel.app
-- **Project dashboard:** https://vercel.com/soverign-acquisitions/client-recap-engine
-
-### Environment variables
-
-Set in all three Vercel environments (Production, Preview, Development):
-
-| Variable                        | Value                                                |
-| ------------------------------- | ---------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`      | `https://cmcjqwlsjxnsxpiofijz.supabase.co`           |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `sb_publishable_…` (publishable, safe in browser)    |
-
-### Deployment workflow
-
-Right now this project is deployed via Vercel CLI from the local checkout (the GitHub → Vercel auto-integration could not be wired through the proxied git host). To redeploy:
-
-```bash
-npx vercel --prod
-```
-
-To wire up push-to-deploy from GitHub (recommended), in the Vercel dashboard go to
-**Project → Settings → Git** and connect `sovereignacq/client-recap-engine`.
-
-### ⚠️ One manual step required in Supabase
-
-For signup confirmation emails to redirect correctly in production, add the Vercel URL
-to Supabase's allowed redirect list:
-
-1. Open **[Authentication → URL Configuration](https://supabase.com/dashboard/project/cmcjqwlsjxnsxpiofijz/auth/url-configuration)** in the Supabase dashboard.
-2. Set **Site URL** to `https://client-recap-engine.vercel.app`.
-3. Under **Redirect URLs**, add:
-   - `https://client-recap-engine.vercel.app/**`
-   - `https://*-soverign-acquisitions.vercel.app/**` (for preview deploys)
-   - `http://localhost:3000/**`
+- **Supabase** project `cmcjqwlsjxnsxpiofijz` (region us-west-2, Postgres 17). Schema: `profiles`, `clients`, `recaps` with full RLS. Auth = email + password; confirmation emails redirect to `/auth/callback`.
+- **Vercel** project `client-recap-engine` (team soverign-acquisitions). Production at https://client-recap-engine.vercel.app. Env vars `NEXT_PUBLIC_SUPABASE_*` set for Production, Preview, Development.
 
 ---
 
@@ -97,11 +129,12 @@ to Supabase's allowed redirect list:
 
 ```bash
 npm install
+cp .env.local.example .env.local   # then fill in real values
 npm run dev    # http://localhost:3000
 ```
 
 ## How to deploy
 
 ```bash
-npx vercel --prod    # or just push to main once Git integration is connected
+npx vercel --prod
 ```
