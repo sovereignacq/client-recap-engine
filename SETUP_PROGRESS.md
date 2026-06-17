@@ -6,7 +6,7 @@
 - [x] **Step 2 — Supabase**: Database + Auth wired up. ✅
 - [x] **Step 3 — Vercel**: Deployment + environment variables. ✅
 - [x] **Step 4 — Stripe**: Billing integration (code + DB ready; pending manual product creation). ⚠️
-- [ ] **Step 5 — Resend**: Transactional email setup (not started)
+- [x] **Step 5 — Resend**: Transactional email setup (code complete; pending manual API key + DNS). ⚠️
 
 ---
 
@@ -113,6 +113,81 @@ When ready to charge real money:
 2. Create a live-mode webhook at the same URL.
 3. Replace the `STRIPE_*` env vars in Vercel production with the `sk_live_...`, live `price_...`, and live `whsec_...` values.
 4. Redeploy.
+
+---
+
+## Step 5 details
+
+### What's been built
+
+**Database** (migration `add_welcome_email_sent_at` + `add_trial_end_email_sent_for`):
+- `profiles.welcome_email_sent_at` (timestamptz) — idempotency for the welcome email.
+- `subscriptions.trial_end_email_sent_for` (timestamptz) — idempotency for trial-ending emails (one per `trial_end` value).
+
+**Code:**
+
+| Path                                          | Purpose                                                       |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| `src/lib/email/resend.ts`                     | Lazy Resend client + `sendEmail()` wrapper that swallows errors |
+| `src/lib/email/templates.ts`                  | Plain-HTML templates: welcome, trial ending, payment failed, canceled |
+| `src/app/auth/callback/route.ts`              | Sends welcome email after first email confirmation (idempotent) |
+| `src/app/api/stripe/webhook/route.ts`         | Sends billing emails on `past_due`, trial ending (≤3 days), and cancellation |
+
+**When emails fire:**
+- **Welcome** — fires once when a user confirms their email and `/auth/callback` exchanges the code. Re-runs are skipped via `welcome_email_sent_at`.
+- **Trial ending** — fires on `customer.subscription.updated` when `status=trialing` and `trial_end` is within 3 days. Stripe automatically sends a `trial_will_end` event ~3 days before trial end, which arrives as a `subscription.updated` mirror. Stored `trial_end_email_sent_for` prevents duplicates.
+- **Payment failed** — fires when subscription status transitions to `past_due` (previous DB row had any other status).
+- **Subscription canceled** — fires on `customer.subscription.deleted`.
+
+All templates are dependency-free HTML (no React Email). All sends are best-effort: a Resend outage will log an error but will NOT break the auth callback or the Stripe webhook.
+
+### ⚠️ Manual steps required
+
+#### 1. Sign up for Resend + create an API key
+
+1. Go to [resend.com](https://resend.com) and sign up (free tier covers 3,000 emails/mo, 100/day).
+2. After signup, go to [resend.com/api-keys](https://resend.com/api-keys) → **Create API Key** → name it `client-recap-engine production` → permission **Sending access** → scope **Full access** (or restrict to a single domain later).
+3. Copy the `re_...` key. You'll only see it once.
+
+#### 2. Add the API key to Vercel
+
+```bash
+cd client-recap-engine
+echo "re_..." | npx vercel env add RESEND_API_KEY production
+echo "re_..." | npx vercel env add RESEND_API_KEY preview
+echo "re_..." | npx vercel env add RESEND_API_KEY development
+```
+
+Also add it to `.env.local` for local testing.
+
+#### 3. (Optional but recommended) Verify a sending domain
+
+Until you verify a domain, Resend sandbox mode will **only deliver to the email address you signed up with**. To send to anyone else:
+
+1. Go to [resend.com/domains](https://resend.com/domains) → **Add Domain** → enter the domain you own (e.g. `clientrecap.com`).
+2. Resend will show 4 DNS records (SPF, DKIM ×2, optionally a MAIL FROM record). Add them at your registrar (Cloudflare, Namecheap, Route53, etc.).
+3. Click **Verify DNS Records** in Resend. Usually completes within minutes; can take up to 72h depending on registrar TTL.
+4. Once verified, set the `from` address:
+
+   ```bash
+   echo 'client-recap-engine <hello@yourdomain.com>' | npx vercel env add RESEND_FROM_EMAIL production
+   ```
+
+If you skip this step, leave `RESEND_FROM_EMAIL` unset and the app will fall back to `onboarding@resend.dev` — fine for testing, not for production.
+
+#### 4. Redeploy
+
+```bash
+npx vercel --prod
+```
+
+#### 5. Test the flow
+
+- **Welcome email:** sign up a brand-new account with an email address you can check, confirm via the Supabase confirmation email, and the welcome email should arrive within seconds.
+- **Billing emails:** in the Stripe test dashboard, find the test subscription you created at [dashboard.stripe.com/test/subscriptions](https://dashboard.stripe.com/test/subscriptions) and trigger:
+  - **Trial ending:** click the subscription → "Actions" → "Update trial end" → set a date <3 days away. Within seconds Stripe fires `customer.subscription.updated` and you'll get the trial-ending email.
+  - **Payment failed:** swap the card to Stripe's `4000000000000341` test card → wait for next invoice attempt (or in the dashboard, manually mark the invoice as failed).
+  - **Canceled:** cancel the subscription from the portal at `/dashboard` → cancellation email arrives.
 
 ---
 
