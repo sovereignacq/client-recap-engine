@@ -6,7 +6,8 @@
 - [x] **Step 2 — Supabase**: Database + Auth wired up. ✅
 - [x] **Step 3 — Vercel**: Deployment + environment variables. ✅
 - [x] **Step 4 — Stripe**: Billing integration (code + DB ready; pending manual product creation). ⚠️
-- [x] **Step 5 — Resend**: Transactional email setup (code complete; pending manual API key + DNS). ⚠️
+- [x] **Step 5 — Resend**: Transactional email setup (code complete; API key live; **domain verification pending** — DuckDNS doesn't support the required DKIM/CNAME records, revisit when a real domain is acquired). ⚠️
+- [x] **Step 6 — Core product: Clients + Recaps + AI generation**: code complete; pending `GEMINI_API_KEY`. ⚠️
 
 ---
 
@@ -188,6 +189,62 @@ npx vercel --prod
   - **Trial ending:** click the subscription → "Actions" → "Update trial end" → set a date <3 days away. Within seconds Stripe fires `customer.subscription.updated` and you'll get the trial-ending email.
   - **Payment failed:** swap the card to Stripe's `4000000000000341` test card → wait for next invoice attempt (or in the dashboard, manually mark the invoice as failed).
   - **Canceled:** cancel the subscription from the portal at `/dashboard` → cancellation email arrives.
+
+---
+
+## Step 6 details
+
+### What's been built
+
+**Database** (migrations `extend_recaps_for_ai` + `recaps_cascade_on_client_delete`):
+- `recaps` gained `subject_line`, `tone` (check: professional|friendly|brief), `raw_notes`, `call_to_action`, `model` columns.
+- Indexes on `recaps(owner_id, created_at)`, `recaps(client_id, created_at)`, `clients(owner_id, created_at)`.
+- `recaps.client_id` FK now `ON DELETE CASCADE` so deleting a client removes its recaps.
+
+**Code:**
+
+| Path                                                          | Purpose                                                       |
+| ------------------------------------------------------------- | ------------------------------------------------------------- |
+| `src/lib/ai/client.ts`                                        | Lazy Gemini client + `generateRecap()` with tone-aware prompt |
+| `src/lib/usage.ts`                                            | `getCurrentPlan()` + `getUsage()` for free-tier enforcement   |
+| `src/app/dashboard/clients/`                                  | Client CRUD: list, new, [id], [id]/edit, delete with cascade  |
+| `src/app/dashboard/clients/[id]/recaps/new/`                  | Generate-then-save recap form with editable AI output         |
+| `src/app/dashboard/recaps/`                                   | Flat list of all recaps                                       |
+| `src/app/dashboard/recaps/[id]/`                              | View / edit / mark sent / delete a recap; copy + mailto links |
+| `src/app/dashboard/recaps/actions.ts`                         | Server actions: generate, save, update, delete, mark sent     |
+
+**Free-tier enforcement:**
+- Free: 1 client, 3 recaps per calendar month
+- Pro (any active subscription — trialing/active/past_due): unlimited
+- Limits checked server-side in `actions.ts` AND surfaced in the UI with Upgrade CTAs.
+
+**AI model:** `gemini-2.5-flash` (via `@google/genai` v2.8). Response uses JSON schema mode so we always get a clean `{subject, body}` object.
+
+### ⚠️ Manual step — add the Gemini API key
+
+1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and create or reuse an API key.
+2. Add it to Vercel:
+
+   ```bash
+   cd client-recap-engine
+   echo "YOUR_GEMINI_KEY" | npx vercel env add GEMINI_API_KEY production
+   echo "YOUR_GEMINI_KEY" | npx vercel env add GEMINI_API_KEY preview
+   echo "YOUR_GEMINI_KEY" | npx vercel env add GEMINI_API_KEY development
+   ```
+
+3. Also paste it into `.env.local` for local development.
+4. Redeploy: `npx vercel --prod`
+
+Without the key, the New Recap page will show an inline warning and disable the Generate button. Everything else (creating clients, viewing past recaps, etc.) still works.
+
+### Test flow
+
+1. Sign in → dashboard → click **Clients** card → **+ New client**.
+2. Add a client → land on their detail page → **+ New recap**.
+3. Paste any notes, pick a tone, click **Generate recap**.
+4. Edit the subject/body if needed → **Save recap**.
+5. On the recap view: **Copy** to clipboard, or **Open in email** (mailto: — only if the client has an email on file).
+6. **Mark as sent** when you've sent it.
 
 ---
 

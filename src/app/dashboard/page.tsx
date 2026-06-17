@@ -91,14 +91,22 @@ export default async function DashboardPage({
         )}
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-lg border border-zinc-200 p-6 dark:border-zinc-800">
+          <Link
+            href="/dashboard/clients"
+            className="rounded-lg border border-zinc-200 p-6 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+          >
             <p className="text-sm text-zinc-600 dark:text-zinc-400">Clients</p>
             <p className="mt-2 text-3xl font-semibold">{clientsCount ?? 0}</p>
-          </div>
-          <div className="rounded-lg border border-zinc-200 p-6 dark:border-zinc-800">
+            <p className="mt-1 text-xs text-zinc-500">Manage →</p>
+          </Link>
+          <Link
+            href="/dashboard/recaps"
+            className="rounded-lg border border-zinc-200 p-6 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+          >
             <p className="text-sm text-zinc-600 dark:text-zinc-400">Recaps</p>
             <p className="mt-2 text-3xl font-semibold">{recapsCount ?? 0}</p>
-          </div>
+            <p className="mt-1 text-xs text-zinc-500">View all →</p>
+          </Link>
         </section>
 
         <section className="rounded-lg border border-zinc-200 p-6 dark:border-zinc-800">
@@ -136,9 +144,7 @@ export default async function DashboardPage({
           </div>
         </section>
 
-        <section className="rounded-lg border border-dashed border-zinc-300 p-6 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-          Next up: client and recap CRUD UI.
-        </section>
+
       </div>
     </main>
   );
