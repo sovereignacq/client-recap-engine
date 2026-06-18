@@ -13,7 +13,6 @@ export const CARD_CATEGORIES = [
 export const CARD_INTENTS = [
   { value: "grade", label: "Grade & return" },
   { value: "sell", label: "Sell to us" },
-  { value: "consign", label: "Consign" },
 ] as const;
 
 export const CARD_STATUSES = [

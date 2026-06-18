@@ -221,7 +221,8 @@ Respond with ONLY one JSON object, no markdown, no commentary.`;
       { text: prompt },
     ],
     config: {
-      temperature: 0.1,
+      temperature: 0,
+      seed: 7,
       responseMimeType: "application/json",
       responseSchema: {
         type: "object",
@@ -343,7 +344,8 @@ Respond with ONLY one JSON object, no markdown.`;
     model: MODEL,
     contents: prompt,
     config: {
-      temperature: 0.2,
+      temperature: 0,
+      seed: 7,
       responseMimeType: "application/json",
       responseSchema: {
         type: "object",
@@ -467,7 +469,8 @@ Respond with ONLY one JSON object, no markdown, no commentary.`;
       { text: prompt },
     ],
     config: {
-      temperature: 0.15,
+      temperature: 0,
+      seed: 7,
       responseMimeType: "application/json",
       responseSchema: {
         type: "object",

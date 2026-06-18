@@ -15,7 +15,7 @@ import { lookupPokemonCard } from "@/lib/pokemon";
 const BUCKET = "card-images";
 
 const VALID_CATEGORIES: ReadonlyArray<CardCategory> = ["sports", "tcg", "other"];
-const VALID_INTENTS = ["grade", "sell", "consign"] as const;
+const VALID_INTENTS = ["grade", "sell"] as const;
 const VALID_STATUSES = [
   "received",
   "identifying",
@@ -233,6 +233,21 @@ export async function estimateFmvAction(
     ? categoryRaw
     : "") as CardCategory | "";
 
+  // If we already have a real cross-referenced market price (e.g. from the
+  // Pokémon TCG database), anchor the estimate to it instead of guessing. This
+  // keeps the estimate stable and consistent with the matched market value.
+  const refCents = Number(String(formData.get("reference_cents") ?? ""));
+  if (Number.isFinite(refCents) && refCents > 0) {
+    return {
+      ok: true,
+      lowCents: Math.round(refCents * 0.85),
+      highCents: Math.round(refCents * 1.15),
+      confidence: 0.9,
+      rationale: "Anchored to the matched market price for this card.",
+      model: "market",
+    };
+  }
+
   try {
     const r = await estimateCardValue({
       category,
@@ -297,11 +312,6 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
   const intent = (VALID_INTENTS as ReadonlyArray<string>).includes(intentRaw)
     ? intentRaw
     : "grade";
-  const statusRaw = String(formData.get("status") ?? "received").trim();
-  const status = (VALID_STATUSES as ReadonlyArray<string>).includes(statusRaw)
-    ? statusRaw
-    : "received";
-
   const idConfidenceRaw = String(formData.get("id_confidence") ?? "").trim();
   const idConfidence = idConfidenceRaw ? Number(idConfidenceRaw) : null;
 
@@ -338,6 +348,10 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
     }
   }
   const autoGradeLabel = String(formData.get("auto_grade_label") ?? "").trim() || null;
+
+  // Status is automatic, not picked by the user: a freshly graded card starts
+  // "graded", otherwise "received".
+  const status = gradeReport ? "graded" : "received";
 
   const { data, error } = await supabase
     .from("cards")

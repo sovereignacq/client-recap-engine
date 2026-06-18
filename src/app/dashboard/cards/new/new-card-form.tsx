@@ -2,12 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  CARD_CATEGORIES,
-  CARD_INTENTS,
-  CARD_STATUSES,
-  formatMoneyCents,
-} from "@/lib/cards";
+import { CARD_CATEGORIES, CARD_INTENTS, formatMoneyCents } from "@/lib/cards";
 import { createClient } from "@/lib/supabase/client";
 import {
   identifyByPathsAction,
@@ -119,7 +114,6 @@ export function NewCardForm({
   // Workflow / record
   const [submitterId, setSubmitterId] = useState(defaultSubmitterId ?? "");
   const [intent, setIntent] = useState("grade");
-  const [status, setStatus] = useState("received");
 
   const setIdField = (k: keyof Identification, v: string) =>
     setId((prev) => ({ ...prev, [k]: v }));
@@ -211,6 +205,9 @@ export function NewCardForm({
     fd.set("card_number", id.cardNumber);
     fd.set("variant", id.variant);
     fd.set("grade", gradeReport?.label ?? "");
+    if (reference?.marketPriceCents) {
+      fd.set("reference_cents", String(reference.marketPriceCents));
+    }
     startEstimate(async () => {
       const r = await estimateFmvAction(fd);
       if (r.ok) {
@@ -254,7 +251,6 @@ export function NewCardForm({
     fd.set("card_number", id.cardNumber);
     fd.set("variant", id.variant);
     fd.set("intent", intent);
-    fd.set("status", status);
     fd.set("submitter_id", submitterId);
     fd.set("fmv", fmv);
     fd.set("fmv_notes", fmvNotes);
@@ -346,31 +342,38 @@ export function NewCardForm({
       )}
 
       {reference && (
-        <div className="border-l-2 border-blue-500 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
-          <p className="font-medium">{reference.label}</p>
+        <div className="border border-black/15 p-4 dark:border-white/20">
+          <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            <span aria-hidden>✓</span> Verified match
+          </p>
+          <p className="mt-1.5 text-sm">{reference.label}</p>
           {reference.marketPriceCents !== null && (
-            <p className="mt-1">
-              Market price (reference):{" "}
-              <span className="font-semibold tabular-nums">
-                {formatMoneyCents(reference.marketPriceCents)}
+            <div className="mt-3 flex items-center justify-between border-t border-black/10 pt-3 dark:border-white/15">
+              <span className="text-sm">
+                <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+                  Market price
+                </span>{" "}
+                <span className="ml-1 font-semibold tabular-nums">
+                  {formatMoneyCents(reference.marketPriceCents)}
+                </span>
               </span>
               <button
                 type="button"
                 onClick={() =>
                   setFmv((reference.marketPriceCents! / 100).toFixed(2))
                 }
-                className="ml-3 text-xs underline underline-offset-2 hover:opacity-70"
+                className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
               >
                 Use as FMV
               </button>
-            </p>
+            </div>
           )}
           {reference.url && (
             <a
               href={reference.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-1 inline-block text-xs underline underline-offset-2 opacity-80 hover:opacity-100"
+              className="mt-2 inline-block text-[11px] uppercase tracking-[0.12em] text-zinc-500 underline-offset-2 hover:underline"
             >
               View market data ↗
             </a>
@@ -556,20 +559,9 @@ export function NewCardForm({
       {/* Record */}
       <section className="space-y-4">
         <h2 className={SECTION}>Record</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={LABEL}>Submitter</label>
-            <select value={submitterId} onChange={(e) => setSubmitterId(e.target.value)} className={INPUT}>
-              <option value="">— none —</option>
-              {submitters.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={LABEL}>Intent</label>
+            <label className={LABEL}>What should happen to it?</label>
             <select value={intent} onChange={(e) => setIntent(e.target.value)} className={INPUT}>
               {CARD_INTENTS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -577,23 +569,42 @@ export function NewCardForm({
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-[11px] text-zinc-400">
+              “Sell to us” means APEX TCG buys it from the owner at fair market value.
+            </p>
           </div>
           <div>
-            <label className={LABEL}>Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className={INPUT}>
-              {CARD_STATUSES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <label className={LABEL}>Owner / submitter (optional)</label>
+            {submitters.length > 0 ? (
+              <select value={submitterId} onChange={(e) => setSubmitterId(e.target.value)} className={INPUT}>
+                <option value="">— not specified —</option>
+                {submitters.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className={`${INPUT} flex items-center justify-between text-zinc-500`}>
+                <span>No submitters yet</span>
+                <a
+                  href="/dashboard/submitters/new"
+                  target="_blank"
+                  className="text-[11px] uppercase tracking-[0.12em] underline-offset-2 hover:underline"
+                >
+                  + Add
+                </a>
+              </div>
+            )}
+            <p className="mt-1 text-[11px] text-zinc-400">
+              Who this card belongs to. Leave blank if it&apos;s your own stock.
+            </p>
           </div>
         </div>
-        {submitters.length === 0 && (
-          <p className="text-xs text-zinc-500">
-            No submitters yet — you can save without one and link it later.
-          </p>
-        )}
+        <p className="text-[11px] text-zinc-400">
+          Status is tracked automatically — newly graded cards start as “Graded,”
+          others as “Received.”
+        </p>
       </section>
 
       {error && <ErrorBox>{error}</ErrorBox>}
