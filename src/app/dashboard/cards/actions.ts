@@ -6,7 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 import {
   identifyCard,
   estimateCardValue,
+  gradeCard,
   type CardCategory,
+  type GradeResult,
 } from "@/lib/ai/client";
 import { lookupPokemonCard } from "@/lib/pokemon";
 
@@ -159,6 +161,38 @@ export async function identifyByPathsAction(input: {
   }
 }
 
+export type GradeState =
+  | { ok: true; grade: GradeResult }
+  | { ok: false; error: string };
+
+/**
+ * Grade a card from its stored photos (front + optional back). Downloads the
+ * images server-side and runs the strict grading pass.
+ */
+export async function gradeByPathsAction(input: {
+  frontPath: string;
+  backPath: string | null;
+}): Promise<GradeState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  if (!input.frontPath) return { ok: false, error: "A front photo is required to grade." };
+
+  const front = await downloadImage(supabase, input.frontPath);
+  if (!front) return { ok: false, error: "Could not read the front photo." };
+  const back = input.backPath ? await downloadImage(supabase, input.backPath) : null;
+
+  try {
+    const grade = await gradeCard({ images: [front, ...(back ? [back] : [])] });
+    return { ok: true, grade };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Grading failed.";
+    return { ok: false, error: msg };
+  }
+}
+
 export type EstimateState =
   | {
       ok: true;
@@ -291,6 +325,20 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
     }
   }
 
+  const gradeReportStr = String(formData.get("grade_report") ?? "").trim();
+  let gradeReport: unknown = null;
+  let autoGrade: number | null = null;
+  if (gradeReportStr) {
+    try {
+      gradeReport = JSON.parse(gradeReportStr);
+      const og = (gradeReport as { overall?: unknown }).overall;
+      if (typeof og === "number" && Number.isFinite(og)) autoGrade = og;
+    } catch {
+      gradeReport = null;
+    }
+  }
+  const autoGradeLabel = String(formData.get("auto_grade_label") ?? "").trim() || null;
+
   const { data, error } = await supabase
     .from("cards")
     .insert({
@@ -312,6 +360,9 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
       id_model: String(formData.get("id_model") ?? "").trim() || null,
       id_raw: idRaw,
       grade: String(formData.get("grade") ?? "").trim() || null,
+      auto_grade: autoGrade,
+      auto_grade_label: autoGradeLabel,
+      grade_report: gradeReport,
       fmv_cents: fmvCents,
       fmv_source: fmvCents !== null ? "operator" : null,
       fmv_notes: String(formData.get("fmv_notes") ?? "").trim() || null,

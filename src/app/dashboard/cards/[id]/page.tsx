@@ -12,6 +12,7 @@ import {
 } from "@/lib/cards";
 import { CardEditForm } from "./card-edit-form";
 import { DeleteCardButton } from "./delete-button";
+import { GradeReportView, type GradeReportData } from "../grade-report";
 
 export default async function CardDetailPage({
   params,
@@ -144,6 +145,15 @@ export default async function CardDetailPage({
               </figure>
             )}
           </div>
+        )}
+
+        {card.grade_report && (
+          <section className="border border-black/10 p-6 dark:border-white/15">
+            <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+              Grade assessment
+            </p>
+            <GradeReportView report={card.grade_report as GradeReportData} />
+          </section>
         )}
 
         <section className="border border-black/10 p-6 dark:border-white/15">

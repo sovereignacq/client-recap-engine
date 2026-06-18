@@ -384,3 +384,181 @@ Respond with ONLY one JSON object, no markdown.`;
     model: MODEL,
   };
 }
+
+// ============================================================
+// Photo-based grading
+//
+// Produces a strict 1–10 grade with centering / corners / edges / surface
+// subgrades, an itemized flaw list (area + where + severity), and a written
+// rationale. Honest about photo limits — poor photos cap the grade and are
+// called out in the summary.
+// ============================================================
+
+export type GradeFlaw = {
+  area: "centering" | "corners" | "edges" | "surface" | "print" | "other";
+  location: string; // e.g. "top-right corner (front)"
+  description: string;
+  severity: "minor" | "moderate" | "major";
+};
+
+export type GradeResult = {
+  overall: number; // 1–10, .5 steps
+  label: string; // e.g. "MINT 9"
+  centering: number;
+  corners: number;
+  edges: number;
+  surface: number;
+  centeringMeasurement: string; // e.g. "55/45 L-R · 60/40 T-B" or ""
+  flaws: GradeFlaw[];
+  summary: string;
+  photoQuality: "good" | "fair" | "poor";
+  model: string;
+};
+
+const GRADE_SCALE = `STRICT 1–10 SCALE (be critical — most raw cards are 7–9, not 10):
+- 10 GEM-MINT: virtually perfect. Sharp corners, clean edges, flawless surface, centering ~55/45 or better on both axes.
+- 9 MINT: one tiny flaw allowed (a hint of edge wear, very minor centering off).
+- 8 NM-MINT: minor wear — slight corner softness or minor edge/surface flaw.
+- 7 NEAR-MINT: a couple of minor flaws or one moderate.
+- 6 EX-MINT / 5 EX: noticeable corner/edge wear, light surface scratches, off-centering.
+- 4 VG-EX / 3 VG: rounding, creasing starting, surface scuffing.
+- 2 GOOD / 1 POOR: heavy wear, creases, major surface damage.`;
+
+/** Grade a card strictly from its photos. */
+export async function gradeCard(input: {
+  images: { base64: string; mimeType: string }[];
+}): Promise<GradeResult> {
+  const ai = getGenAI();
+
+  const imageNote =
+    input.images.length > 1
+      ? "Two photos are provided: the FIRST is the front, the SECOND is the back. Grade BOTH sides — a flaw on either side counts."
+      : "Only the front photo is provided. Grade what you can and note in the summary that the back was not assessed (this caps the grade).";
+
+  const prompt = `You are a professional trading-card grader doing a strict, condition-only assessment from photos. Be critical and conservative — when in doubt, grade DOWN.
+
+${imageNote}
+
+${GRADE_SCALE}
+
+ASSESS FOUR CATEGORIES, each 1–10:
+- centering: estimate the border ratios left/right and top/bottom; worse centering = lower.
+- corners: sharpness vs. softening, fraying, rounding, dings. Check all four, front and back.
+- edges: chipping, whitening, roughness along all four edges, front and back.
+- surface: scratches, print lines/dots, scuffs, indentations, gloss loss, stains, creases.
+
+RULES
+- The OVERALL grade is holistic and is limited by the weakest categories (a single major flaw caps it low) — it is NOT a simple average.
+- List EVERY flaw you can actually see in "flaws", each with: area, a specific location (say which corner/edge and which side, e.g. "bottom-left corner (front)", "right edge (back)", "surface center (front)"), a short description, and severity (minor/moderate/major). If the card looks clean, return an empty list.
+- Judge ONLY condition, not the card's identity or value.
+- "centering_measurement" = your best read like "55/45 L-R · 60/40 T-B", or "" if you can't tell.
+- Set "photo_quality": good / fair / poor. If poor (blurry, low-res, glare, cropped), say so in the summary and do NOT award a high grade you can't justify.
+- "summary": 2–4 sentences explaining why it got this grade and the main factors.
+
+OUTPUT
+Respond with ONLY one JSON object, no markdown, no commentary.`;
+
+  const response = await ai.models.generateContent({
+    model: MODEL,
+    contents: [
+      ...input.images.map((img) => ({
+        inlineData: { mimeType: img.mimeType, data: img.base64 },
+      })),
+      { text: prompt },
+    ],
+    config: {
+      temperature: 0.15,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "object",
+        properties: {
+          overall: { type: "number" },
+          label: { type: "string" },
+          centering: { type: "number" },
+          corners: { type: "number" },
+          edges: { type: "number" },
+          surface: { type: "number" },
+          centering_measurement: { type: "string" },
+          photo_quality: { type: "string", enum: ["good", "fair", "poor"] },
+          flaws: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                area: {
+                  type: "string",
+                  enum: ["centering", "corners", "edges", "surface", "print", "other"],
+                },
+                location: { type: "string" },
+                description: { type: "string" },
+                severity: { type: "string", enum: ["minor", "moderate", "major"] },
+              },
+              required: ["area", "location", "description", "severity"],
+            },
+          },
+          summary: { type: "string" },
+        },
+        required: [
+          "overall",
+          "label",
+          "centering",
+          "corners",
+          "edges",
+          "surface",
+          "centering_measurement",
+          "photo_quality",
+          "flaws",
+          "summary",
+        ],
+      },
+    },
+  });
+
+  const text = response.text ?? "";
+  let p: Record<string, unknown>;
+  try {
+    p = JSON.parse(text);
+  } catch {
+    throw new Error(`AI returned non-JSON output: ${text.slice(0, 200)}`);
+  }
+
+  const clampGrade = (v: unknown) => {
+    const n = typeof v === "number" ? v : Number(v);
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(10, Math.max(1, Math.round(n * 2) / 2));
+  };
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
+  const flawsRaw = Array.isArray(p.flaws) ? p.flaws : [];
+  const flaws: GradeFlaw[] = flawsRaw
+    .map((f) => f as Record<string, unknown>)
+    .map((f) => ({
+      area: ["centering", "corners", "edges", "surface", "print", "other"].includes(
+        str(f.area),
+      )
+        ? (str(f.area) as GradeFlaw["area"])
+        : "other",
+      location: str(f.location),
+      description: str(f.description),
+      severity: ["minor", "moderate", "major"].includes(str(f.severity))
+        ? (str(f.severity) as GradeFlaw["severity"])
+        : "minor",
+    }))
+    .filter((f) => f.description || f.location);
+
+  const pq = str(p.photo_quality);
+
+  return {
+    overall: clampGrade(p.overall),
+    label: str(p.label),
+    centering: clampGrade(p.centering),
+    corners: clampGrade(p.corners),
+    edges: clampGrade(p.edges),
+    surface: clampGrade(p.surface),
+    centeringMeasurement: str(p.centering_measurement),
+    flaws,
+    summary: str(p.summary),
+    photoQuality: (["good", "fair", "poor"].includes(pq) ? pq : "fair") as GradeResult["photoQuality"],
+    model: MODEL,
+  };
+}

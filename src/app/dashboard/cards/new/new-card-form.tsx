@@ -12,9 +12,12 @@ import { createClient } from "@/lib/supabase/client";
 import {
   identifyByPathsAction,
   estimateFmvAction,
+  gradeByPathsAction,
   createCardAction,
   type IdentifyReference,
 } from "../actions";
+import type { GradeResult } from "@/lib/ai/client";
+import { GradeReportView } from "../grade-report";
 
 type Submitter = { id: string; name: string };
 
@@ -84,8 +87,10 @@ export function NewCardForm({
 
   const [isIdentifying, startIdentify] = useTransition();
   const [isEstimating, startEstimate] = useTransition();
+  const [isGrading, startGrade] = useTransition();
   const [isSaving, startSave] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [gradeReport, setGradeReport] = useState<GradeResult | null>(null);
 
   // Files (uploaded straight to storage from the browser)
   const [frontFile, setFrontFile] = useState<File | null>(null);
@@ -187,6 +192,7 @@ export function NewCardForm({
     setIdNotes("");
     setIdModel(null);
     setReference(null);
+    setGradeReport(null);
     setImagePath(null);
     setImageBackPath(null);
     setPreviewUrl(null);
@@ -221,6 +227,24 @@ export function NewCardForm({
     });
   };
 
+  const handleGrade = () => {
+    if (!imagePath) {
+      setError("Add photos and identify first — grading needs the card images.");
+      return;
+    }
+    setError(null);
+    startGrade(async () => {
+      const r = await gradeByPathsAction({ frontPath: imagePath, backPath: imageBackPath });
+      if (r.ok) {
+        setGradeReport(r.grade);
+        // Prefill the operator grade field with the assessed label.
+        if (r.grade.label) setGrade(r.grade.label);
+      } else {
+        setError(r.error);
+      }
+    });
+  };
+
   const handleSave = () => {
     setError(null);
     const fd = new FormData();
@@ -247,6 +271,10 @@ export function NewCardForm({
     if (imagePath) fd.set("image_path", imagePath);
     if (imageBackPath) fd.set("image_back_path", imageBackPath);
     fd.set("id_raw", JSON.stringify({ ...id, confidence, notes: idNotes, model: idModel }));
+    if (gradeReport) {
+      fd.set("grade_report", JSON.stringify(gradeReport));
+      if (gradeReport.label) fd.set("auto_grade_label", gradeReport.label);
+    }
     startSave(async () => {
       const r = await createCardAction(fd);
       if (r.ok) {
@@ -419,7 +447,31 @@ export function NewCardForm({
 
       {/* Grade + value */}
       <section className="space-y-4">
-        <h2 className={SECTION}>Grade &amp; value</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className={SECTION}>Grade &amp; value</h2>
+          <button
+            type="button"
+            onClick={handleGrade}
+            disabled={!imagePath || isGrading}
+            title={imagePath ? undefined : "Grading needs the uploaded photos"}
+            className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
+          >
+            {isGrading ? "Grading…" : gradeReport ? "Re-grade" : "Grade card"}
+          </button>
+        </div>
+
+        {!imagePath && (
+          <p className="text-xs text-zinc-500">
+            Grading runs on the card photos. Use “Identify card” with photos to enable it.
+          </p>
+        )}
+
+        {gradeReport && (
+          <div className="border border-black/15 p-4 dark:border-white/20">
+            <GradeReportView report={gradeReport} />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TextField label="Grade / condition" value={grade} onChange={setGrade} placeholder="e.g. PSA 10, BGS 9.5, Raw — NM" />
           <div>
