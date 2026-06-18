@@ -8,11 +8,8 @@ import {
   CARD_STATUSES,
   formatMoneyCents,
 } from "@/lib/cards";
-import {
-  identifyCardAction,
-  estimateFmvAction,
-  createCardAction,
-} from "../actions";
+import { createClient } from "@/lib/supabase/client";
+import { identifyByPathsAction, estimateFmvAction, createCardAction } from "../actions";
 
 type Submitter = { id: string; name: string };
 
@@ -45,6 +42,15 @@ type Estimate = {
   rationale: string;
 };
 
+const BUCKET = "card-images";
+const EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "image/heif": "heif",
+};
+
 // Shared minimalist styles
 const INPUT =
   "mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white";
@@ -61,10 +67,12 @@ export function NewCardForm({
   submitters,
   defaultSubmitterId,
   aiConfigured,
+  userId,
 }: {
   submitters: Submitter[];
   defaultSubmitterId: string | null;
   aiConfigured: boolean;
+  userId: string;
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<"upload" | "details">("upload");
@@ -74,6 +82,11 @@ export function NewCardForm({
   const [isSaving, startSave] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // Files (uploaded straight to storage from the browser)
+  const [frontFile, setFrontFile] = useState<File | null>(null);
+  const [backFile, setBackFile] = useState<File | null>(null);
+  const [hint, setHint] = useState("");
+
   // Identification
   const [id, setId] = useState<Identification>(EMPTY_ID);
   const [confidence, setConfidence] = useState<number | null>(null);
@@ -81,7 +94,7 @@ export function NewCardForm({
   const [idModel, setIdModel] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
-  // Images
+  // Stored image paths + local previews
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [imageBackPath, setImageBackPath] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -101,42 +114,62 @@ export function NewCardForm({
   const setIdField = (k: keyof Identification, v: string) =>
     setId((prev) => ({ ...prev, [k]: v }));
 
-  const handleIdentify = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  async function uploadToStorage(file: File): Promise<string> {
+    const ext = EXT[file.type];
+    if (!ext) throw new Error("Unsupported image type. Use JPEG, PNG, WEBP, or HEIC.");
+    if (file.size > 10 * 1024 * 1024) throw new Error("Image is too large (max 10MB).");
+    const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+    const supabase = createClient();
+    const { error: upErr } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
+    return path;
+  }
+
+  const handleIdentify = () => {
     setError(null);
-    const fd = new FormData(e.currentTarget);
+    if (!frontFile) {
+      setError("Add a photo of the front of the card.");
+      return;
+    }
     startIdentify(async () => {
-      const r = await identifyCardAction(fd);
-      if (!r.ok) {
-        setError(r.error);
-        return;
+      try {
+        const frontPath = await uploadToStorage(frontFile);
+        const backPath = backFile ? await uploadToStorage(backFile) : null;
+        setImagePath(frontPath);
+        setImageBackPath(backPath);
+        setPreviewUrl(URL.createObjectURL(frontFile));
+        setPreviewBackUrl(backFile ? URL.createObjectURL(backFile) : null);
+
+        const r = await identifyByPathsAction({ frontPath, backPath, hint: hint.trim() || null });
+        if (!r.ok) {
+          setError(r.error);
+          return;
+        }
+        setIdModel(r.model);
+        if (r.recognitionError) {
+          setError("Photos saved, but automatic identification didn't return a result. Enter the details manually.");
+          setConfidence(null);
+        } else {
+          const i = r.identification;
+          setId({
+            category: i.category,
+            sportOrGame: i.sportOrGame,
+            playerOrCharacter: i.playerOrCharacter,
+            cardYear: i.cardYear,
+            manufacturer: i.manufacturer,
+            setName: i.setName,
+            cardNumber: i.cardNumber,
+            variant: i.variant,
+          });
+          setConfidence(i.confidence);
+          setIdNotes(i.notes);
+        }
+        setPhase("details");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong uploading the photo.");
       }
-      setImagePath(r.imagePath);
-      setImageBackPath(r.imageBackPath);
-      setPreviewUrl(r.previewUrl);
-      setPreviewBackUrl(r.previewBackUrl);
-      setIdModel(r.model);
-      if (r.recognitionError) {
-        setError(
-          `Photos saved, but automatic identification didn't return a result. Enter the details manually.`,
-        );
-        setConfidence(null);
-      } else {
-        const i = r.identification;
-        setId({
-          category: i.category,
-          sportOrGame: i.sportOrGame,
-          playerOrCharacter: i.playerOrCharacter,
-          cardYear: i.cardYear,
-          manufacturer: i.manufacturer,
-          setName: i.setName,
-          cardNumber: i.cardNumber,
-          variant: i.variant,
-        });
-        setConfidence(i.confidence);
-        setIdNotes(i.notes);
-      }
-      setPhase("details");
     });
   };
 
@@ -205,10 +238,7 @@ export function NewCardForm({
     if (idModel) fd.set("id_model", idModel);
     if (imagePath) fd.set("image_path", imagePath);
     if (imageBackPath) fd.set("image_back_path", imageBackPath);
-    fd.set(
-      "id_raw",
-      JSON.stringify({ ...id, confidence, notes: idNotes, model: idModel }),
-    );
+    fd.set("id_raw", JSON.stringify({ ...id, confidence, notes: idNotes, model: idModel }));
     startSave(async () => {
       const r = await createCardAction(fd);
       if (r.ok) {
@@ -222,26 +252,29 @@ export function NewCardForm({
   // ---------------- Upload phase ----------------
   if (phase === "upload") {
     return (
-      <form onSubmit={handleIdentify} className="space-y-6">
+      <div className="space-y-6">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Uploader
-            name="image_front"
             label="Front"
-            required={aiConfigured}
+            required
             hint="Used to identify the card."
+            file={frontFile}
+            onChange={setFrontFile}
           />
           <Uploader
-            name="image_back"
             label="Back"
             required={false}
             hint="Recommended — needed for accurate grading."
+            file={backFile}
+            onChange={setBackFile}
           />
         </div>
 
         <div>
           <label className={LABEL}>Hint (optional)</label>
           <input
-            name="hint"
+            value={hint}
+            onChange={(e) => setHint(e.target.value)}
             placeholder="e.g. 2018 Prizm Luka rookie, silver"
             className={INPUT}
           />
@@ -250,14 +283,19 @@ export function NewCardForm({
         {error && <ErrorBox>{error}</ErrorBox>}
 
         <div className="flex flex-wrap gap-3">
-          <button type="submit" disabled={!aiConfigured || isIdentifying} className={BTN_PRIMARY}>
-            {isIdentifying ? "Identifying…" : "Identify card"}
+          <button
+            type="button"
+            onClick={handleIdentify}
+            disabled={!aiConfigured || isIdentifying}
+            className={BTN_PRIMARY}
+          >
+            {isIdentifying ? "Uploading & identifying…" : "Identify card"}
           </button>
           <button type="button" onClick={handleManual} className={BTN_GHOST}>
             Enter manually
           </button>
         </div>
-      </form>
+      </div>
     );
   }
 
@@ -482,31 +520,30 @@ export function NewCardForm({
 }
 
 function Uploader({
-  name,
   label,
   required,
   hint,
+  file,
+  onChange,
 }: {
-  name: string;
   label: string;
   required: boolean;
   hint: string;
+  file: File | null;
+  onChange: (f: File | null) => void;
 }) {
-  const [fileName, setFileName] = useState<string | null>(null);
   return (
     <label className="flex cursor-pointer flex-col gap-2 border border-dashed border-black/20 px-4 py-6 text-center transition hover:border-black dark:border-white/25 dark:hover:border-white">
       <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
         {label}
         {!required && <span className="ml-1 normal-case tracking-normal text-zinc-400">(optional)</span>}
       </span>
-      <span className="truncate text-sm">{fileName ?? "Choose photo"}</span>
+      <span className="truncate text-sm">{file?.name ?? "Choose photo"}</span>
       <span className="text-[11px] text-zinc-400">{hint}</span>
       <input
-        name={name}
         type="file"
         accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
-        required={required}
-        onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
         className="sr-only"
       />
     </label>

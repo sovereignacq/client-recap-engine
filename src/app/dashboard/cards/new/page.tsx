@@ -55,6 +55,7 @@ export default async function NewCardPage({
           submitters={submitters ?? []}
           defaultSubmitterId={submitter ?? null}
           aiConfigured={isAIConfigured()}
+          userId={user.id}
         />
       </div>
     </main>

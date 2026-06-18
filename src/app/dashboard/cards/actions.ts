@@ -10,15 +10,6 @@ import {
 } from "@/lib/ai/client";
 
 const BUCKET = "card-images";
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB, matches bucket config
-
-const MIME_EXT: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/heic": "heic",
-  "image/heif": "heif",
-};
 
 const VALID_CATEGORIES: ReadonlyArray<CardCategory> = ["sports", "tcg", "other"];
 const VALID_INTENTS = ["grade", "sell", "consign"] as const;
@@ -48,96 +39,42 @@ type Identification = {
 export type IdentifyState =
   | {
       ok: true;
-      imagePath: string;
-      imageBackPath: string | null;
-      previewUrl: string | null;
-      previewBackUrl: string | null;
       identification: Identification;
       model: string | null;
       recognitionError: string | null;
     }
   | { ok: false; error: string };
 
-type UploadedImage = {
-  path: string;
-  previewUrl: string | null;
-  base64: string;
-  mimeType: string;
-};
-
-/**
- * Validate + store one uploaded image in the private bucket. Returns the stored
- * path, a signed preview URL, and the bytes (for recognition). On a validation
- * problem returns an { error } string instead.
- */
-async function uploadImage(
+async function downloadImage(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  file: File,
-): Promise<UploadedImage | { error: string }> {
-  if (file.size > MAX_IMAGE_BYTES) {
-    return { error: "Image is too large (max 10MB)." };
-  }
-  const ext = MIME_EXT[file.type];
-  if (!ext) {
-    return { error: "Unsupported image type. Use JPEG, PNG, WEBP, or HEIC." };
-  }
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, buffer, { contentType: file.type, upsert: false });
-  if (error) return { error: `Upload failed: ${error.message}` };
-
-  const { data: signed } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(path, 60 * 60);
-
-  return {
-    path,
-    previewUrl: signed?.signedUrl ?? null,
-    base64: buffer.toString("base64"),
-    mimeType: file.type,
-  };
+  path: string,
+): Promise<{ base64: string; mimeType: string } | null> {
+  const { data, error } = await supabase.storage.from(BUCKET).download(path);
+  if (error || !data) return null;
+  const buffer = Buffer.from(await data.arrayBuffer());
+  return { base64: buffer.toString("base64"), mimeType: data.type || "image/jpeg" };
 }
 
 /**
- * Upload the front (and optional back) photo to private storage and run
- * identification on both. The uploads happen first; if recognition then fails
- * we still return the stored images so the operator can fill the card in by hand.
- * The back photo is important for accurate grading.
+ * Identify a card from images ALREADY uploaded to storage by the browser.
+ * We only receive the storage paths here (tiny payload), download the bytes
+ * server-side, and run recognition. This avoids routing multi-MB photos
+ * through the Server Action / serverless request-body size limits.
  */
-export async function identifyCardAction(
-  formData: FormData,
-): Promise<IdentifyState> {
+export async function identifyByPathsAction(input: {
+  frontPath: string;
+  backPath: string | null;
+  hint: string | null;
+}): Promise<IdentifyState> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
 
-  const frontFile = formData.get("image_front");
-  const backFile = formData.get("image_back");
-  const hint = String(formData.get("hint") ?? "").trim() || null;
-
-  if (!(frontFile instanceof File) || frontFile.size === 0) {
-    return { ok: false, error: "Add a photo of the front of the card." };
+  if (!input.frontPath) {
+    return { ok: false, error: "Missing front photo." };
   }
-
-  const front = await uploadImage(supabase, user.id, frontFile);
-  if ("error" in front) return { ok: false, error: front.error };
-
-  let back: UploadedImage | null = null;
-  if (backFile instanceof File && backFile.size > 0) {
-    const r = await uploadImage(supabase, user.id, backFile);
-    if ("error" in r) return { ok: false, error: `Back photo: ${r.error}` };
-    back = r;
-  }
-
-  const images = [
-    { base64: front.base64, mimeType: front.mimeType },
-    ...(back ? [{ base64: back.base64, mimeType: back.mimeType }] : []),
-  ];
 
   const empty: Identification = {
     category: "",
@@ -152,18 +89,18 @@ export async function identifyCardAction(
     notes: "",
   };
 
-  const base = {
-    ok: true as const,
-    imagePath: front.path,
-    imageBackPath: back?.path ?? null,
-    previewUrl: front.previewUrl,
-    previewBackUrl: back?.previewUrl ?? null,
-  };
+  const front = await downloadImage(supabase, input.frontPath);
+  if (!front) {
+    return { ok: true, model: null, recognitionError: "Could not read the uploaded front photo.", identification: empty };
+  }
+  const back = input.backPath ? await downloadImage(supabase, input.backPath) : null;
+
+  const images = [front, ...(back ? [back] : [])];
 
   try {
-    const r = await identifyCard({ images, hint });
+    const r = await identifyCard({ images, hint: input.hint });
     return {
-      ...base,
+      ok: true,
       model: r.model,
       recognitionError: null,
       identification: {
@@ -181,7 +118,7 @@ export async function identifyCardAction(
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Identification failed.";
-    return { ...base, model: null, recognitionError: msg, identification: empty };
+    return { ok: true, model: null, recognitionError: msg, identification: empty };
   }
 }
 
