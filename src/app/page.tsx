@@ -27,15 +27,15 @@ export default async function Home() {
               Powered by Gemini 2.5
             </p>
             <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              Send a client recap{" "}
+              Know exactly what card{" "}
               <span className="bg-gradient-to-r from-zinc-900 to-zinc-500 bg-clip-text text-transparent dark:from-white dark:to-zinc-400">
-                in under a minute.
+                you&apos;re holding.
               </span>
             </h1>
             <p className="mt-6 max-w-lg text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-              Paste your messy meeting notes. Pick a tone. Get a polished,
-              ready-to-send email back. No more &quot;I&apos;ll write that up
-              tomorrow.&quot;
+              Snap a photo and AI identifies the set, year, number, and variant —
+              no guesswork. Then serialize it, value it, and track every card from
+              intake to payout.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -52,7 +52,8 @@ export default async function Home() {
               </Link>
             </div>
             <p className="mt-4 text-xs text-zinc-500">
-              Free tier includes 1 client and 3 recaps per month.
+              Identification never guesses a price — value is confirmed by you, on
+              a card you&apos;ve verified.
             </p>
           </div>
 
@@ -64,46 +65,50 @@ export default async function Home() {
                 <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
                 <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
                 <span className="ml-3 text-[11px] text-zinc-500">
-                  New recap · Acme Inc.
+                  Intake · SAC-000142
                 </span>
               </div>
               <div className="space-y-3 p-4 text-sm">
                 <div>
                   <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                    Your notes
+                    Uploaded photo
                   </p>
-                  <p className="rounded-md bg-zinc-100 p-2 font-mono text-[12px] text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                    met w/ sarah today, discussed Q3 roadmap, she wants
-                    dashboard pushed 2 wks. enterprise pricing call next week.
-                    send updated timeline by friday.
-                  </p>
+                  <div className="flex items-center gap-3 rounded-md bg-zinc-100 p-2 dark:bg-zinc-900">
+                    <span
+                      aria-hidden
+                      className="h-12 w-9 shrink-0 rounded bg-gradient-to-br from-amber-300 via-zinc-200 to-sky-300 dark:from-amber-500/70 dark:via-zinc-600 dark:to-sky-500/70"
+                    />
+                    <span className="text-[12px] text-zinc-600 dark:text-zinc-400">
+                      front_2018_prizm.jpg
+                    </span>
+                    <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                      96% match
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                    Subject
+                    Identified
                   </p>
                   <p className="font-medium">
-                    Q3 Roadmap recap & next steps
+                    2018-19 Panini Prizm · Luka Dončić · #280
+                  </p>
+                  <p className="text-[12px] text-zinc-600 dark:text-zinc-400">
+                    Silver Prizm · Rookie · Basketball
                   </p>
                 </div>
-                <div>
-                  <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                    Body
-                  </p>
-                  <div className="space-y-2 rounded-md border border-zinc-200 bg-zinc-50 p-2 text-[12px] leading-relaxed text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
-                    <p>Hi Sarah,</p>
-                    <p>
-                      Thanks for the discussion today. Quick recap of where we
-                      landed on the Q3 roadmap:
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-md border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-800 dark:bg-zinc-900">
+                    <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                      Grade
                     </p>
-                    <p>
-                      • Dashboard launch will be pushed back two weeks to make
-                      room for the requested timeline adjustments.
-                      <br />• We&apos;ll schedule the enterprise pricing
-                      conversation for next week.
+                    <p className="text-[13px] font-medium">PSA 10</p>
+                  </div>
+                  <div className="rounded-md border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-800 dark:bg-zinc-900">
+                    <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                      FMV (confirmed)
                     </p>
-                    <p>I&apos;ll send the updated timeline by Friday.</p>
-                    <p>Best,</p>
+                    <p className="text-[13px] font-medium tabular-nums">$1,650</p>
                   </div>
                 </div>
               </div>
@@ -121,37 +126,37 @@ export default async function Home() {
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
           <div className="max-w-2xl">
             <p className="text-sm font-medium uppercase tracking-wide text-zinc-500">
-              Built for client work
+              Built for card intake
             </p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Less typing. Fewer dropped balls.
+              Right card. Right value. Every time.
             </h2>
           </div>
 
           <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <FeatureCard
-              title="AI-drafted, you-approved"
-              body="Gemini turns raw notes into a polished email. You stay in control — every recap is editable before it goes out."
+              title="AI identification from a photo"
+              body="Gemini reads the card and returns the category, player/character, year, set, number, and parallel — sports cards and TCG alike — with a confidence score."
             />
             <FeatureCard
-              title="Three tones, one click"
-              body="Professional, Friendly, or Brief. Match your relationship with each client without re-explaining context every time."
+              title="No wrong-card, wrong-price"
+              body="Identification never returns a price. Value is a separate step, locked until you confirm the card — so a misread never carries a bad number."
             />
             <FeatureCard
-              title="Client memory"
-              body="Each client has a profile with notes that color future recaps. New team members can ramp up in minutes."
+              title="Automatic serialization"
+              body="Every saved card gets a unique, sequential serial like SAC-000142 — your own cert number to track it through grading and sale."
             />
             <FeatureCard
-              title="Copy or mailto"
-              body="Send through your own email client. Nothing routes through us, so deliverability is whatever Gmail or Outlook does."
+              title="Submitter record log"
+              body="Keep a clean record of everyone who sends cards in to grade, consign, or sell — with each person's full submission history."
             />
             <FeatureCard
-              title="Free to start"
-              body="One client, three recaps a month. No card required. Upgrade to Pro for unlimited when you're ready."
+              title="Intake-to-payout tracking"
+              body="Move each card through received, grading, graded, sold, or returned, with grade and confirmed fair market value on file."
             />
             <FeatureCard
               title="Yours, encrypted"
-              body="Built on Supabase with row-level security. Your notes and clients are visible only to you."
+              body="Built on Supabase with row-level security and a private photo store. Your cards, submitters, and records are visible only to you."
             />
           </div>
         </div>
@@ -165,25 +170,25 @@ export default async function Home() {
               How it works
             </p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-              From rough notes to a sent email in three steps.
+              From a photo to a serialized record in three steps.
             </h2>
           </div>
 
           <ol className="mt-12 grid gap-8 sm:grid-cols-3">
             <Step
               n={1}
-              title="Add a client"
-              body="Name, email, company, and any notes about them. One profile per relationship."
+              title="Upload a photo"
+              body="Snap the front of the card. AI fills in the set, year, number, and variant with a confidence score — every field stays editable."
             />
             <Step
               n={2}
-              title="Paste your notes"
-              body="Bullets, voice-memo transcripts, half-finished thoughts. The messier, the better."
+              title="Confirm & value"
+              body="Verify the identification against the card, then set a fair market value — with an optional AI ballpark for reference."
             />
             <Step
               n={3}
-              title="Generate & send"
-              body="Pick a tone, click Generate, tweak if you want, then copy or open in your email client."
+              title="Serialize & track"
+              body="Save to assign a unique serial, link the submitter, and follow the card from intake through grading to payout."
             />
           </ol>
         </div>
@@ -202,9 +207,9 @@ export default async function Home() {
                 Try it before you commit.
               </p>
               <ul className="mt-6 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
-                <li>✓ 1 client</li>
-                <li>✓ 3 recaps per month</li>
-                <li>✓ All AI tones</li>
+                <li>✓ AI photo identification</li>
+                <li>✓ Serialized card records</li>
+                <li>✓ Submitter log</li>
               </ul>
               <Link
                 href="/signup"
@@ -226,9 +231,9 @@ export default async function Home() {
                 Or $290/yr — save ~17%. 14-day free trial.
               </p>
               <ul className="mt-6 space-y-2 text-sm">
-                <li>✓ Unlimited clients</li>
-                <li>✓ Unlimited recaps</li>
-                <li>✓ Priority AI generation</li>
+                <li>✓ Unlimited cards &amp; submitters</li>
+                <li>✓ Priority AI identification</li>
+                <li>✓ AI value estimates</li>
                 <li>✓ Email support</li>
               </ul>
               <Link
@@ -246,11 +251,11 @@ export default async function Home() {
       <section className="py-24">
         <div className="mx-auto w-full max-w-3xl px-4 text-center sm:px-6">
           <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            Stop writing the same email three times a week.
+            Stop second-guessing what&apos;s in the stack.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
-            Spend the saved hours on the work that actually moves the
-            relationship forward.
+            Identify it, serialize it, and keep a clean record of every card and
+            every submitter — from the first photo to the final payout.
           </p>
           <Link
             href={signedIn ? "/dashboard" : "/signup"}

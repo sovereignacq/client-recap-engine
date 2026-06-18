@@ -18,33 +18,34 @@ const APP_URL =
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: {
-    default: "client-recap-engine — Send a client recap in under a minute",
-    template: "%s · client-recap-engine",
+    default: "Sovereign Grading — Identify, serialize & grade trading cards",
+    template: "%s · Sovereign Grading",
   },
   description:
-    "Paste your meeting notes. Pick a tone. Get a polished, ready-to-send recap email in seconds. Powered by Gemini 2.5.",
+    "Snap a photo and identify any sports or trading card with AI — set, year, number, and variant. Serialize, value, and track every card from intake to payout. Powered by Gemini 2.5.",
   keywords: [
-    "client recap",
-    "meeting notes",
-    "AI email writer",
-    "follow-up email",
-    "client communication",
-    "consultants",
-    "freelancers",
+    "card grading",
+    "card identification",
+    "sports cards",
+    "trading card game",
+    "PSA",
+    "card serialization",
+    "fair market value",
+    "card intake",
   ],
   openGraph: {
     type: "website",
     url: APP_URL,
-    title: "client-recap-engine — Send a client recap in under a minute",
+    title: "Sovereign Grading — Identify, serialize & grade trading cards",
     description:
-      "Paste your meeting notes. Pick a tone. Get a polished, ready-to-send recap email in seconds.",
-    siteName: "client-recap-engine",
+      "Snap a photo and identify any card with AI, then serialize, value, and track it from intake to payout.",
+    siteName: "Sovereign Grading",
   },
   twitter: {
     card: "summary_large_image",
-    title: "client-recap-engine",
+    title: "Sovereign Grading",
     description:
-      "Paste your meeting notes. Pick a tone. Get a polished, ready-to-send recap email in seconds.",
+      "Snap a photo and identify any card with AI, then serialize, value, and track it from intake to payout.",
   },
   robots: {
     index: true,

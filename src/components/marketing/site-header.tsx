@@ -12,7 +12,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
             aria-hidden
             className="inline-block h-5 w-5 rounded-md bg-gradient-to-br from-zinc-900 to-zinc-600 dark:from-white dark:to-zinc-400"
           />
-          client-recap-engine
+          Sovereign Grading
         </Link>
 
         <nav className="flex items-center gap-1 sm:gap-3">
