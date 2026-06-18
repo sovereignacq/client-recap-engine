@@ -53,6 +53,14 @@ export default async function DashboardPage({
     .from("recaps")
     .select("id", { count: "exact", head: true });
 
+  const { count: cardsCount } = await supabase
+    .from("cards")
+    .select("id", { count: "exact", head: true });
+
+  const { count: submittersCount } = await supabase
+    .from("submitters")
+    .select("id", { count: "exact", head: true });
+
   const planLabel = subscription
     ? subscription.plan === "pro_annual"
       ? "Pro (annual)"
@@ -90,7 +98,25 @@ export default async function DashboardPage({
           </div>
         )}
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Link
+            href="/dashboard/cards"
+            className="rounded-lg border border-zinc-200 p-6 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+          >
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">Cards</p>
+            <p className="mt-2 text-3xl font-semibold">{cardsCount ?? 0}</p>
+            <p className="mt-1 text-xs text-zinc-500">Intake & grade →</p>
+          </Link>
+          <Link
+            href="/dashboard/submitters"
+            className="rounded-lg border border-zinc-200 p-6 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+          >
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Submitters
+            </p>
+            <p className="mt-2 text-3xl font-semibold">{submittersCount ?? 0}</p>
+            <p className="mt-1 text-xs text-zinc-500">Record log →</p>
+          </Link>
           <Link
             href="/dashboard/clients"
             className="rounded-lg border border-zinc-200 p-6 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"

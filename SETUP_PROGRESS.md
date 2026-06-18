@@ -8,6 +8,49 @@
 - [x] **Step 4 — Stripe**: Billing integration (code + DB ready; pending manual product creation). ⚠️
 - [x] **Step 5 — Resend**: Transactional email setup (code complete; API key live; **domain verification pending** — DuckDNS doesn't support the required DKIM/CNAME records, revisit when a real domain is acquired). ⚠️
 - [x] **Step 6 — Core product: Clients + Recaps + AI generation**: code complete; pending `GEMINI_API_KEY`. ⚠️
+- [x] **Step 8 — Card grading: identification + serialization + submitter records**: code + DB complete; reuses `GEMINI_API_KEY`. ⚠️
+
+---
+
+## Step 8 details
+
+### What's been built
+
+A card grading platform layer on top of the existing app: identify a submitted
+card from a photo, serialize it, value it, and keep a record of who submitted it.
+
+**Database** (migrations `card_grading_core`, `card_images_storage`, `harden_set_card_serial_search_path`):
+
+- `submitters` — record log of people who submit cards (name, email, phone, address, notes). Per-owner RLS.
+- `cards` — one row per physical card, with:
+  - **Serialization:** `serial` (e.g. `SAC-000123`), assigned by a `before insert` trigger off the global `card_serial_seq`. Globally unique, like a cert number.
+  - **Structured identification:** `category` (sports/tcg/other), `sport_or_game`, `player_or_character`, `card_year`, `manufacturer`, `set_name`, `card_number`, `variant`, plus `id_status` (unidentified → ai_suggested → confirmed), `id_confidence`, `id_model`, and `id_raw` (jsonb audit snapshot).
+  - **Grade + value:** `grade`, `fmv_cents`, `fmv_currency`, `fmv_source`, `fmv_notes`.
+  - **Workflow:** `intent` (grade/sell/consign), `status` (received → … → sold/returned), `image_path`.
+  - `submitter_id` FK is `ON DELETE SET NULL` so deleting a submitter never destroys card records.
+- Private Supabase Storage bucket `card-images` (10MB limit, image MIME types), with per-owner RLS on `storage.objects` keyed by `<owner_id>/` folder.
+
+**Code:**
+
+| Path | Purpose |
+| --- | --- |
+| `src/lib/ai/client.ts` | `identifyCard()` (Gemini vision → structured ID + confidence, never returns a price) and `estimateCardValue()` (separate, labeled ballpark) |
+| `src/lib/cards.ts` | Option lists (kept in sync with DB check constraints), `cardTitle()`, money formatting |
+| `src/app/dashboard/cards/` | Card list, photo-driven intake (`new/`), and detail/edit |
+| `src/app/dashboard/submitters/` | Submitter CRUD + per-submitter card history |
+| `src/app/dashboard/page.tsx` | Dashboard tiles for Cards + Submitters |
+
+### Accuracy guardrails (the "wrong card → wrong FMV" problem)
+
+- Identification returns **no price**. Value is a *separate* call.
+- The value estimate button is **disabled until the operator ticks "verified against the physical card"** (`id_status = confirmed`), so a misread card can't silently carry a price.
+- AI confidence is surfaced; < 60% shows a "verify every field" warning.
+- The AI estimate is always a labeled *range* the operator must approve; the final `fmv_cents` is operator-set (`fmv_source = 'operator'`). No live market feed is claimed.
+
+### ⚠️ Manual steps
+
+- Set `GEMINI_API_KEY` (same key as Step 6) for photo identification + value estimates. Without it, intake still works manually.
+- The `card-images` bucket and its RLS policies are already created in the live project. Nothing to do unless you recreate the project.
 
 ---
 
