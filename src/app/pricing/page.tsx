@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PricingButtons } from "./pricing-buttons";
 
 export const metadata = {
-  title: "Pricing — client-recap-engine",
+  title: "Pricing",
 };
 
 export default async function PricingPage() {
@@ -35,9 +35,9 @@ export default async function PricingPage() {
             <p className="text-sm text-zinc-600 dark:text-zinc-400">forever</p>
 
             <ul className="mt-6 space-y-2 text-sm">
-              <li>• 1 client</li>
-              <li>• 3 recaps per month</li>
-              <li>• Email support</li>
+              <li>• AI photo identification</li>
+              <li>• Serialized card records</li>
+              <li>• Submitter log</li>
             </ul>
 
             <div className="mt-8">
@@ -66,7 +66,7 @@ export default async function PricingPage() {
             </span>
             <h2 className="text-lg font-semibold">Pro</h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              For client-facing professionals.
+              For dealers and grading operations.
             </p>
             <p className="mt-6 text-4xl font-semibold">
               $29
@@ -80,9 +80,9 @@ export default async function PricingPage() {
             </p>
 
             <ul className="mt-6 space-y-2 text-sm">
-              <li>• Unlimited clients</li>
-              <li>• Unlimited recaps</li>
-              <li>• Priority support</li>
+              <li>• Unlimited cards &amp; submitters</li>
+              <li>• Priority AI identification</li>
+              <li>• AI value estimates</li>
               <li>• 14-day free trial, no card holds</li>
             </ul>
 
