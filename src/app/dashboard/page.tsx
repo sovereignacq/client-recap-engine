@@ -53,6 +53,10 @@ export default async function DashboardPage({
     .from("submitters")
     .select("id", { count: "exact", head: true });
 
+  const { count: offersCount } = await supabase
+    .from("offers")
+    .select("id", { count: "exact", head: true });
+
   const planLabel = subscription
     ? subscription.plan === "pro_annual"
       ? "Pro (annual)"
@@ -99,7 +103,7 @@ export default async function DashboardPage({
           <span aria-hidden className="text-lg">→</span>
         </Link>
 
-        <section className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-2 dark:border-white/15 dark:bg-white/15">
+        <section className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-3 dark:border-white/15 dark:bg-white/15">
           <Link
             href="/dashboard/cards"
             className="bg-white p-8 transition hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
@@ -111,6 +115,18 @@ export default async function DashboardPage({
               {cardsCount ?? 0}
             </p>
             <p className="mt-2 text-xs text-zinc-500">Intake &amp; grade →</p>
+          </Link>
+          <Link
+            href="/dashboard/offers"
+            className="bg-white p-8 transition hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+              Sell-to-us
+            </p>
+            <p className="mt-3 text-4xl font-semibold tabular-nums">
+              {offersCount ?? 0}
+            </p>
+            <p className="mt-2 text-xs text-zinc-500">Offers →</p>
           </Link>
           <Link
             href="/dashboard/submitters"

@@ -76,6 +76,12 @@ export default async function SubmitterDetailPage({
               Edit
             </Link>
             <Link
+              href={`/dashboard/offers/new?submitter=${submitter.id}`}
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            >
+              Make offer
+            </Link>
+            <Link
               href={`/dashboard/cards/new?submitter=${submitter.id}`}
               className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
             >
