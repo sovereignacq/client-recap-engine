@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { isAIConfigured } from "@/lib/ai/client";
 import { NewCardForm } from "./new-card-form";
 
+// Identification (photo upload + vision) can run well past the default
+// serverless limit, especially with both front and back images. Allow up to
+// 60s so the request isn't killed mid-identification.
+export const maxDuration = 60;
+
 export default async function NewCardPage({
   searchParams,
 }: {

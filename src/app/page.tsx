@@ -25,18 +25,18 @@ export default async function Home() {
       <section className="border-b border-black/10 dark:border-white/15">
         <div className="mx-auto grid w-full max-w-6xl gap-14 px-4 py-24 sm:px-6 sm:py-32 lg:grid-cols-2 lg:items-center lg:gap-20">
           <div>
-            <p className={EYEBROW}>Identification · Serialization · Grading</p>
+            <p className={EYEBROW}>Grade · Buy · Sell</p>
             <h1 className="mt-6 text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
-              Know exactly
+              The home
               <br />
-              what card
+              for your
               <br />
-              you&apos;re holding.
+              cards.
             </h1>
             <p className="mt-8 max-w-md text-base leading-7 text-zinc-600 dark:text-zinc-400">
-              Photograph the front and back. Get the set, year, number, and
-              variant — no guesswork. Then serialize it, value it, and track
-              every card from intake to payout.
+              Grade your cards with precise identification. Buy cards and rips
+              from the floor. Sell what you own — or what you pull — to us at fair
+              market value. One platform, end to end.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
               <Link href={signedIn ? "/dashboard" : "/signup"} className={BTN_SOLID}>
@@ -104,11 +104,32 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* PILLARS */}
+      <section className="border-b border-black/10 dark:border-white/15">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-px border-x border-black/10 bg-black/10 sm:grid-cols-3 dark:border-white/15 dark:bg-white/15">
+          <Pillar
+            n="01"
+            title="Grade"
+            body="Photograph the front and back. Get the set, year, number, and variant — then serialize, value, and track every card."
+          />
+          <Pillar
+            n="02"
+            title="Buy"
+            body="Shop singles and rips from the floor. Pull cards live, send them straight to grading, or list them back for sale."
+          />
+          <Pillar
+            n="03"
+            title="Sell"
+            body="Sell cards you own — or cards you just pulled — to us at fair market value, with a clean record of every transaction."
+          />
+        </div>
+      </section>
+
       {/* FEATURES */}
       <section className="border-b border-black/10 dark:border-white/15">
         <div className="mx-auto w-full max-w-6xl px-4 py-24 sm:px-6">
           <div className="max-w-2xl">
-            <p className={EYEBROW}>Built for intake</p>
+            <p className={EYEBROW}>Built for the floor</p>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
               Right card. Right value. Every time.
             </h2>
@@ -239,6 +260,18 @@ export default async function Home() {
       </section>
 
       <SiteFooter />
+    </div>
+  );
+}
+
+function Pillar({ n, title, body }: { n: string; title: string; body: string }) {
+  return (
+    <div className="bg-white p-10 dark:bg-black">
+      <span className="font-mono text-xs text-zinc-400">{n}</span>
+      <h3 className="mt-3 text-2xl font-semibold tracking-tight">{title}</h3>
+      <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+        {body}
+      </p>
     </div>
   );
 }

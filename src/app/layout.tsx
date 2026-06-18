@@ -18,34 +18,34 @@ const APP_URL =
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: {
-    default: "APEX TCG — Identify, serialize & grade trading cards",
+    default: "APEX TCG — Grade, buy & sell trading cards",
     template: "%s · APEX TCG",
   },
   description:
-    "Photograph the front and back of any sports or trading card to identify the set, year, number, and variant. Serialize, value, and track every card from intake to payout.",
+    "Grade your cards with precise identification, buy singles and rips from the floor, and sell what you own or pull to us at fair market value. One platform, end to end.",
   keywords: [
     "card grading",
     "card identification",
+    "buy cards",
+    "sell cards",
+    "card rips",
     "sports cards",
     "trading card game",
-    "TCG grader",
-    "card serialization",
     "fair market value",
-    "card intake",
   ],
   openGraph: {
     type: "website",
     url: APP_URL,
-    title: "APEX TCG — Identify, serialize & grade trading cards",
+    title: "APEX TCG — Grade, buy & sell trading cards",
     description:
-      "Photograph any card to identify it, then serialize, value, and track it from intake to payout.",
+      "Grade, buy, and sell trading cards on one platform — precise identification, rips, and fair-market sell-to-us.",
     siteName: "APEX TCG",
   },
   twitter: {
     card: "summary_large_image",
     title: "APEX TCG",
     description:
-      "Photograph any card to identify it, then serialize, value, and track it from intake to payout.",
+      "Grade, buy, and sell trading cards on one platform — precise identification, rips, and fair-market sell-to-us.",
   },
   robots: {
     index: true,
