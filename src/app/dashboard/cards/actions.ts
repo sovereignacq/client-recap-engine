@@ -359,7 +359,7 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
           : null,
       id_model: String(formData.get("id_model") ?? "").trim() || null,
       id_raw: idRaw,
-      grade: String(formData.get("grade") ?? "").trim() || null,
+      grade: autoGradeLabel, // grade comes only from the assessment, never user input
       auto_grade: autoGrade,
       auto_grade_label: autoGradeLabel,
       grade_report: gradeReport,
@@ -431,7 +431,7 @@ export async function updateCardAction(
       card_number: String(formData.get("card_number") ?? "").trim() || null,
       variant: String(formData.get("variant") ?? "").trim() || null,
       id_status: idStatus,
-      grade: String(formData.get("grade") ?? "").trim() || null,
+      // grade is intentionally NOT updatable — it's set only by the assessment.
       fmv_cents: fmvCents,
       fmv_source: fmvCents !== null ? "operator" : null,
       fmv_notes: String(formData.get("fmv_notes") ?? "").trim() || null,

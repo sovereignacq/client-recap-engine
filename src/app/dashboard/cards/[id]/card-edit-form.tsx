@@ -57,7 +57,6 @@ export function CardEditForm({
     card_number: initial.card_number ?? "",
     variant: initial.variant ?? "",
     id_status: initial.id_status,
-    grade: initial.grade ?? "",
     fmv:
       initial.fmv_cents !== null ? (initial.fmv_cents / 100).toFixed(2) : "",
     fmv_notes: initial.fmv_notes ?? "",
@@ -93,7 +92,7 @@ export function CardEditForm({
     fd.set("set_name", f.set_name);
     fd.set("card_number", f.card_number);
     fd.set("variant", f.variant);
-    fd.set("grade", f.grade);
+    fd.set("grade", initial.grade ?? "");
     startEstimate(async () => {
       const r = await estimateFmvAction(fd);
       if (r.ok) {
@@ -173,18 +172,18 @@ export function CardEditForm({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
           Grade &amp; value
         </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField label="Grade / condition" value={f.grade} onChange={(v) => set("grade", v)} placeholder="e.g. PSA 10, Raw — NM" />
-          <div>
-            <label className="text-sm font-medium">Fair market value (USD)</label>
-            <input
-              value={f.fmv}
-              onChange={(e) => set("fmv", e.target.value)}
-              inputMode="decimal"
-              placeholder="0.00"
-              className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white"
-            />
-          </div>
+        <div>
+          <label className="text-sm font-medium">Fair market value (USD)</label>
+          <input
+            value={f.fmv}
+            onChange={(e) => set("fmv", e.target.value)}
+            inputMode="decimal"
+            placeholder="0.00"
+            className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white sm:max-w-xs"
+          />
+          <p className="mt-1 text-[11px] text-zinc-400">
+            The grade is set by the assessment and isn&apos;t editable here.
+          </p>
         </div>
 
         {aiConfigured && (

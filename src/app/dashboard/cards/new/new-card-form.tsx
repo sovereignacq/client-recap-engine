@@ -120,7 +120,6 @@ export function NewCardForm({
   const [submitterId, setSubmitterId] = useState(defaultSubmitterId ?? "");
   const [intent, setIntent] = useState("grade");
   const [status, setStatus] = useState("received");
-  const [grade, setGrade] = useState("");
 
   const setIdField = (k: keyof Identification, v: string) =>
     setId((prev) => ({ ...prev, [k]: v }));
@@ -211,7 +210,7 @@ export function NewCardForm({
     fd.set("set_name", id.setName);
     fd.set("card_number", id.cardNumber);
     fd.set("variant", id.variant);
-    fd.set("grade", grade);
+    fd.set("grade", gradeReport?.label ?? "");
     startEstimate(async () => {
       const r = await estimateFmvAction(fd);
       if (r.ok) {
@@ -237,8 +236,6 @@ export function NewCardForm({
       const r = await gradeByPathsAction({ frontPath: imagePath, backPath: imageBackPath });
       if (r.ok) {
         setGradeReport(r.grade);
-        // Prefill the operator grade field with the assessed label.
-        if (r.grade.label) setGrade(r.grade.label);
       } else {
         setError(r.error);
       }
@@ -256,7 +253,6 @@ export function NewCardForm({
     fd.set("set_name", id.setName);
     fd.set("card_number", id.cardNumber);
     fd.set("variant", id.variant);
-    fd.set("grade", grade);
     fd.set("intent", intent);
     fd.set("status", status);
     fd.set("submitter_id", submitterId);
@@ -473,7 +469,17 @@ export function NewCardForm({
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField label="Grade / condition" value={grade} onChange={setGrade} placeholder="e.g. PSA 10, BGS 9.5, Raw — NM" />
+          <div>
+            <label className={LABEL}>Grade</label>
+            <div className={`${INPUT} flex items-center text-zinc-500`}>
+              {gradeReport
+                ? `${gradeReport.overall} · ${gradeReport.label}`
+                : "Run “Grade card” to assess"}
+            </div>
+            <p className="mt-1 text-[11px] text-zinc-400">
+              Set by the grade assessment — not editable.
+            </p>
+          </div>
           <div>
             <label className={LABEL}>Fair market value (USD)</label>
             <input
