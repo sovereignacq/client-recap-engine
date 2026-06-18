@@ -45,14 +45,6 @@ export default async function DashboardPage({
     .limit(1)
     .maybeSingle()) as { data: SubRow | null };
 
-  const { count: clientsCount } = await supabase
-    .from("clients")
-    .select("id", { count: "exact", head: true });
-
-  const { count: recapsCount } = await supabase
-    .from("recaps")
-    .select("id", { count: "exact", head: true });
-
   const { count: cardsCount } = await supabase
     .from("cards")
     .select("id", { count: "exact", head: true });
@@ -71,21 +63,20 @@ export default async function DashboardPage({
 
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-16">
-      <div className="w-full max-w-3xl space-y-8">
+      <div className="w-full max-w-3xl space-y-10">
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Signed in as{" "}
-              <span className="font-medium">
-                {profile?.full_name || profile?.email || user.email}
-              </span>
+            <p className="text-base font-bold uppercase tracking-[0.25em]">
+              APEX&nbsp;TCG
+            </p>
+            <p className="mt-1 text-sm text-zinc-500">
+              {profile?.full_name || profile?.email || user.email}
             </p>
           </div>
           <form action={logout}>
             <button
               type="submit"
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="rounded-none border border-black/20 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
             >
               Sign out
             </button>
@@ -93,57 +84,57 @@ export default async function DashboardPage({
         </header>
 
         {params.checkout === "success" && (
-          <div className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+          <div className="border-l-2 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
             Thanks for subscribing. Your trial has started.
           </div>
         )}
 
-        <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Link
+          href="/dashboard/cards/new"
+          className="flex items-center justify-between rounded-none bg-black px-6 py-5 text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+        >
+          <span className="text-sm font-medium uppercase tracking-[0.18em]">
+            Intake a card
+          </span>
+          <span aria-hidden className="text-lg">→</span>
+        </Link>
+
+        <section className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-2 dark:border-white/15 dark:bg-white/15">
           <Link
             href="/dashboard/cards"
-            className="rounded-lg border border-zinc-200 p-6 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+            className="bg-white p-8 transition hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
           >
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">Cards</p>
-            <p className="mt-2 text-3xl font-semibold">{cardsCount ?? 0}</p>
-            <p className="mt-1 text-xs text-zinc-500">Intake & grade →</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+              Cards
+            </p>
+            <p className="mt-3 text-4xl font-semibold tabular-nums">
+              {cardsCount ?? 0}
+            </p>
+            <p className="mt-2 text-xs text-zinc-500">Intake &amp; grade →</p>
           </Link>
           <Link
             href="/dashboard/submitters"
-            className="rounded-lg border border-zinc-200 p-6 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
+            className="bg-white p-8 transition hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
           >
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
               Submitters
             </p>
-            <p className="mt-2 text-3xl font-semibold">{submittersCount ?? 0}</p>
-            <p className="mt-1 text-xs text-zinc-500">Record log →</p>
-          </Link>
-          <Link
-            href="/dashboard/clients"
-            className="rounded-lg border border-zinc-200 p-6 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
-          >
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">Clients</p>
-            <p className="mt-2 text-3xl font-semibold">{clientsCount ?? 0}</p>
-            <p className="mt-1 text-xs text-zinc-500">Manage →</p>
-          </Link>
-          <Link
-            href="/dashboard/recaps"
-            className="rounded-lg border border-zinc-200 p-6 transition hover:border-zinc-400 dark:border-zinc-800 dark:hover:border-zinc-600"
-          >
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">Recaps</p>
-            <p className="mt-2 text-3xl font-semibold">{recapsCount ?? 0}</p>
-            <p className="mt-1 text-xs text-zinc-500">View all →</p>
+            <p className="mt-3 text-4xl font-semibold tabular-nums">
+              {submittersCount ?? 0}
+            </p>
+            <p className="mt-2 text-xs text-zinc-500">Record log →</p>
           </Link>
         </section>
 
-        <section className="rounded-lg border border-zinc-200 p-6 dark:border-zinc-800">
+        <section className="border border-black/10 p-6 dark:border-white/15">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
                 Current plan
               </p>
-              <p className="mt-1 text-xl font-semibold">{planLabel}</p>
+              <p className="mt-2 text-xl font-semibold">{planLabel}</p>
               {subscription && (
-                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="mt-1 text-sm text-zinc-500">
                   Status: <span className="font-medium">{subscription.status}</span>
                   {subscription.cancel_at_period_end && " · cancels at period end"}
                   {subscription.trial_end &&
@@ -161,7 +152,7 @@ export default async function DashboardPage({
               ) : (
                 <Link
                   href="/pricing"
-                  className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+                  className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                 >
                   Upgrade
                 </Link>
@@ -169,8 +160,6 @@ export default async function DashboardPage({
             </div>
           </div>
         </section>
-
-
       </div>
     </main>
   );

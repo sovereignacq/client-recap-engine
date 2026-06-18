@@ -40,49 +40,50 @@ export default async function CardsListPage() {
     )
     .order("created_at", { ascending: false });
 
-  // Supabase types the embedded relation as an array; normalize to a single row.
   const cards: CardRow[] = (data ?? []).map((c) => ({
     ...c,
     submitter: Array.isArray(c.submitter) ? (c.submitter[0] ?? null) : c.submitter,
   })) as CardRow[];
 
   return (
-    <main className="flex flex-1 flex-col items-center px-4 py-12">
-      <div className="w-full max-w-4xl space-y-6">
-        <header className="flex items-center justify-between">
+    <main className="flex flex-1 flex-col items-center px-4 py-14">
+      <div className="w-full max-w-4xl space-y-8">
+        <header className="flex items-end justify-between gap-4">
           <div>
             <Link
               href="/dashboard"
-              className="text-sm text-zinc-600 hover:underline dark:text-zinc-400"
+              className="text-[11px] uppercase tracking-[0.15em] text-zinc-500 hover:text-black dark:hover:text-white"
             >
-              ← Back to dashboard
+              ← Dashboard
             </Link>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Cards</h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Cards</h1>
+            <p className="mt-1 text-sm text-zinc-500">
               Every submitted card, serialized and tracked from intake to payout.
             </p>
           </div>
           <Link
             href="/dashboard/cards/new"
-            className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+            className="shrink-0 rounded-none bg-black px-5 py-3 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
           >
-            + Intake card
+            Intake card
           </Link>
         </header>
 
         {cards.length > 0 ? (
-          <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          <ul className="border border-black/10 dark:border-white/15">
             {cards.map((c) => (
-              <li key={c.id}>
+              <li key={c.id} className="border-b border-black/10 last:border-0 dark:border-white/15">
                 <Link
                   href={`/dashboard/cards/${c.id}`}
-                  className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                  className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-950"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{cardTitle(c)}</p>
-                    <p className="text-xs text-zinc-500">
-                      <span className="font-mono">{c.serial}</span> ·{" "}
-                      {labelFor(CARD_STATUSES, c.status)}
+                    <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-zinc-500">
+                      <span className="font-mono normal-case tracking-normal">
+                        {c.serial}
+                      </span>{" "}
+                      · {labelFor(CARD_STATUSES, c.status)}
                       {c.submitter?.name ? ` · ${c.submitter.name}` : ""}
                       {c.id_status !== "confirmed"
                         ? ` · ${labelFor(ID_STATUSES, c.id_status)}`
@@ -97,13 +98,13 @@ export default async function CardsListPage() {
             ))}
           </ul>
         ) : (
-          <div className="rounded-lg border border-dashed border-zinc-300 p-12 text-center dark:border-zinc-700">
-            <p className="text-zinc-600 dark:text-zinc-400">
+          <div className="border border-dashed border-black/20 p-16 text-center dark:border-white/20">
+            <p className="text-sm text-zinc-500">
               No cards yet. Intake your first card to identify and serialize it.
             </p>
             <Link
               href="/dashboard/cards/new"
-              className="mt-4 inline-block rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              className="mt-5 inline-block rounded-none bg-black px-5 py-3 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
               Intake card
             </Link>

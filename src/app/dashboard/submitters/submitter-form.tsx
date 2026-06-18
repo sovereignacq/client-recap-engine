@@ -70,7 +70,7 @@ export function SubmitterForm(props: Props) {
           rows={4}
           defaultValue={props.initial?.notes ?? ""}
           placeholder="How you know them, payout preferences, anything worth keeping on the record."
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+          className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white"
         />
       </div>
 
@@ -125,7 +125,7 @@ function Field({
         type={type}
         defaultValue={defaultValue}
         required={required}
-        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+        className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white"
       />
     </div>
   );

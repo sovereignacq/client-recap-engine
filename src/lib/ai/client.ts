@@ -164,13 +164,13 @@ export type CardIdentification = {
 export type IdentifyCardResult = CardIdentification & { model: string };
 
 /**
- * Identify a trading card from a photo. `imageBase64` is the raw base64 payload
- * (no `data:` prefix). Returns structured identification fields plus a 0–1
- * confidence. Deliberately returns NO valuation — see `estimateCardValue`.
+ * Identify a trading card from photos. `images` carries the raw base64 payloads
+ * (no `data:` prefix) — the front first, optionally the back second. Returns
+ * structured identification fields plus a 0–1 confidence. Deliberately returns
+ * NO valuation — see `estimateCardValue`.
  */
 export async function identifyCard(input: {
-  imageBase64: string;
-  mimeType: string;
+  images: { base64: string; mimeType: string }[];
   hint?: string | null;
 }): Promise<IdentifyCardResult> {
   const ai = getGenAI();
@@ -179,9 +179,16 @@ export async function identifyCard(input: {
     ? `The submitter said this about the card (treat as a hint only, verify against the image): "${input.hint.trim()}"`
     : "No operator hint provided.";
 
+  const imageNote =
+    input.images.length > 1
+      ? "Two photos are provided: the FIRST is the front of the card, the SECOND is the back. Use the front to identify the card and the back to confirm the set, card number, and condition."
+      : "One photo is provided: the front of the card.";
+
   const prompt = `You are a meticulous trading-card identification expert covering BOTH sports cards (Topps, Panini, Bowman, Upper Deck, Donruss, etc.) and trading card games (Pokémon, Magic: The Gathering, Yu-Gi-Oh!, etc.).
 
-Identify the card in the image as precisely as the image allows.
+Identify the card in the image(s) as precisely as the image allows.
+
+${imageNote}
 
 ${hintLine}
 
@@ -191,7 +198,7 @@ CRITICAL ACCURACY RULES
 - Set "confidence" to your honest probability (0.0–1.0) that the WHOLE identification (year + set + player/character + card number + variant together) is correct. A great photo of a common base card can be ~0.95; a blurry photo or an ambiguous parallel should be well below 0.5.
 - Distinguish base cards from parallels/inserts/variations carefully (e.g. "Silver Prizm", "Refractor", "1st Edition", "Holo", "/99" serial-numbered). Put that in "variant".
 - "card_year" is the card's copyright/season year as printed (use season form like "2020-21" when shown).
-- Use "notes" to flag anything uncertain, what's blurry, or why confidence is low.
+- Use "notes" to flag anything uncertain, what's blurry, any visible condition issues on the front or back, or why confidence is low.
 
 OUTPUT
 Respond with ONLY one JSON object, no markdown, no commentary.`;
@@ -199,7 +206,9 @@ Respond with ONLY one JSON object, no markdown, no commentary.`;
   const response = await ai.models.generateContent({
     model: MODEL,
     contents: [
-      { inlineData: { mimeType: input.mimeType, data: input.imageBase64 } },
+      ...input.images.map((img) => ({
+        inlineData: { mimeType: img.mimeType, data: img.base64 },
+      })),
       { text: prompt },
     ],
     config: {

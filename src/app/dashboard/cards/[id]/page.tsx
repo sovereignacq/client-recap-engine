@@ -46,64 +46,68 @@ export default async function CardDetailPage({
         .maybeSingle()).data
     : null;
 
-  let imageUrl: string | null = null;
-  if (card.image_path) {
-    const { data: signed } = await supabase.storage
+  async function signedUrl(path: string | null): Promise<string | null> {
+    if (!path) return null;
+    const { data } = await supabase.storage
       .from("card-images")
-      .createSignedUrl(card.image_path, 60 * 60);
-    imageUrl = signed?.signedUrl ?? null;
+      .createSignedUrl(path, 60 * 60);
+    return data?.signedUrl ?? null;
   }
+  const [imageUrl, imageBackUrl] = await Promise.all([
+    signedUrl(card.image_path),
+    signedUrl(card.image_back_path),
+  ]);
 
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-12">
       <div className="w-full max-w-2xl space-y-6">
         <Link
           href="/dashboard/cards"
-          className="text-sm text-zinc-600 hover:underline dark:text-zinc-400"
+          className="text-[11px] uppercase tracking-[0.15em] text-zinc-500 hover:text-black dark:hover:text-white"
         >
-          ← Back to cards
+          ← Cards
         </Link>
 
         <header className="space-y-1">
           <p className="font-mono text-sm text-zinc-500">{card.serial}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-3xl font-semibold tracking-tight">
             {cardTitle(card)}
           </h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
             {labelFor(CARD_STATUSES, card.status)} ·{" "}
             {labelFor(CARD_INTENTS, card.intent)} ·{" "}
             {labelFor(ID_STATUSES, card.id_status)}
             {card.id_confidence !== null &&
               card.id_status !== "confirmed" &&
-              ` (${Math.round(Number(card.id_confidence) * 100)}% AI)`}
+              ` (${Math.round(Number(card.id_confidence) * 100)}% match)`}
           </p>
         </header>
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">
+        <section className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-2 dark:border-white/15 dark:bg-white/15">
+          <div className="bg-white p-5 dark:bg-black">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-400">
               Fair market value
             </p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">
+            <p className="mt-2 text-2xl font-semibold tabular-nums">
               {formatMoneyCents(card.fmv_cents, card.fmv_currency)}
             </p>
             {card.fmv_notes && (
               <p className="mt-1 text-xs text-zinc-500">{card.fmv_notes}</p>
             )}
           </div>
-          <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">
+          <div className="bg-white p-5 dark:bg-black">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-400">
               Submitter
             </p>
             {submitter ? (
               <Link
                 href={`/dashboard/submitters/${submitter.id}`}
-                className="mt-1 inline-block text-lg font-medium hover:underline"
+                className="mt-2 inline-block text-lg font-medium hover:underline"
               >
                 {submitter.name}
               </Link>
             ) : (
-              <p className="mt-1 text-lg text-zinc-500">— none linked —</p>
+              <p className="mt-2 text-lg text-zinc-500">— none linked —</p>
             )}
             <p className="mt-1 text-xs text-zinc-500">
               Grade: {card.grade || "—"}
@@ -111,16 +115,38 @@ export default async function CardDetailPage({
           </div>
         </section>
 
-        {imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={card.serial}
-            className="max-h-80 w-auto rounded-lg border border-zinc-200 dark:border-zinc-800"
-          />
+        {(imageUrl || imageBackUrl) && (
+          <div className="flex flex-wrap gap-3">
+            {imageUrl && (
+              <figure className="space-y-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageUrl}
+                  alt={`${card.serial} front`}
+                  className="max-h-80 w-auto border border-black/10 dark:border-white/15"
+                />
+                <figcaption className="text-[11px] uppercase tracking-[0.15em] text-zinc-400">
+                  Front
+                </figcaption>
+              </figure>
+            )}
+            {imageBackUrl && (
+              <figure className="space-y-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageBackUrl}
+                  alt={`${card.serial} back`}
+                  className="max-h-80 w-auto border border-black/10 dark:border-white/15"
+                />
+                <figcaption className="text-[11px] uppercase tracking-[0.15em] text-zinc-400">
+                  Back
+                </figcaption>
+              </figure>
+            )}
+          </div>
         )}
 
-        <section className="rounded-lg border border-zinc-200 p-5 dark:border-zinc-800">
+        <section className="border border-black/10 p-6 dark:border-white/15">
           <CardEditForm
             cardId={card.id}
             submitters={submitters ?? []}
@@ -146,10 +172,7 @@ export default async function CardDetailPage({
         </section>
 
         <footer className="flex items-center justify-between pt-2 text-xs text-zinc-500">
-          <span>
-            Intake {new Date(card.created_at).toLocaleString()}
-            {card.id_model ? ` · identified via ${card.id_model}` : ""}
-          </span>
+          <span>Intake {new Date(card.created_at).toLocaleString()}</span>
           <DeleteCardButton cardId={card.id} serial={card.serial} />
         </footer>
       </div>

@@ -18,17 +18,17 @@ const APP_URL =
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: {
-    default: "Sovereign Grading — Identify, serialize & grade trading cards",
-    template: "%s · Sovereign Grading",
+    default: "APEX TCG — Identify, serialize & grade trading cards",
+    template: "%s · APEX TCG",
   },
   description:
-    "Snap a photo and identify any sports or trading card with AI — set, year, number, and variant. Serialize, value, and track every card from intake to payout. Powered by Gemini 2.5.",
+    "Photograph the front and back of any sports or trading card to identify the set, year, number, and variant. Serialize, value, and track every card from intake to payout.",
   keywords: [
     "card grading",
     "card identification",
     "sports cards",
     "trading card game",
-    "PSA",
+    "TCG grader",
     "card serialization",
     "fair market value",
     "card intake",
@@ -36,16 +36,16 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: APP_URL,
-    title: "Sovereign Grading — Identify, serialize & grade trading cards",
+    title: "APEX TCG — Identify, serialize & grade trading cards",
     description:
-      "Snap a photo and identify any card with AI, then serialize, value, and track it from intake to payout.",
-    siteName: "Sovereign Grading",
+      "Photograph any card to identify it, then serialize, value, and track it from intake to payout.",
+    siteName: "APEX TCG",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Sovereign Grading",
+    title: "APEX TCG",
     description:
-      "Snap a photo and identify any card with AI, then serialize, value, and track it from intake to payout.",
+      "Photograph any card to identify it, then serialize, value, and track it from intake to payout.",
   },
   robots: {
     index: true,

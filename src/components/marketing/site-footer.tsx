@@ -2,19 +2,19 @@ import Link from "next/link";
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-zinc-200 bg-zinc-50 py-10 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+    <footer className="border-t border-black/10 py-12 text-sm text-zinc-500 dark:border-white/15">
       <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-4 sm:flex-row sm:px-6">
-        <p>
-          © {new Date().getFullYear()} Sovereign Grading. All rights reserved.
+        <p className="text-[11px] uppercase tracking-[0.2em]">
+          © {new Date().getFullYear()} APEX TCG
         </p>
-        <nav className="flex items-center gap-6">
-          <Link href="/pricing" className="hover:text-zinc-900 dark:hover:text-zinc-50">
+        <nav className="flex items-center gap-6 text-[11px] uppercase tracking-[0.15em]">
+          <Link href="/pricing" className="transition hover:text-black dark:hover:text-white">
             Pricing
           </Link>
-          <Link href="/login" className="hover:text-zinc-900 dark:hover:text-zinc-50">
+          <Link href="/login" className="transition hover:text-black dark:hover:text-white">
             Sign in
           </Link>
-          <Link href="/signup" className="hover:text-zinc-900 dark:hover:text-zinc-50">
+          <Link href="/signup" className="transition hover:text-black dark:hover:text-white">
             Get started
           </Link>
         </nav>

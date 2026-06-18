@@ -25,7 +25,7 @@ export default async function LoginPage({
         <div className="space-y-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Welcome back to Sovereign Grading.
+            Welcome back to APEX TCG.
           </p>
         </div>
 

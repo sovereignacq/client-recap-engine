@@ -137,7 +137,7 @@ export function CardEditForm({
             <select
               value={f.category}
               onChange={(e) => set("category", e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white"
             >
               <option value="">—</option>
               {CARD_CATEGORIES.map((o) => (
@@ -182,7 +182,7 @@ export function CardEditForm({
               onChange={(e) => set("fmv", e.target.value)}
               inputMode="decimal"
               placeholder="0.00"
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white"
             />
           </div>
         </div>
@@ -190,7 +190,7 @@ export function CardEditForm({
         {aiConfigured && (
           <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium">AI value estimate</p>
+              <p className="text-sm font-medium">Value estimate</p>
               <button
                 type="button"
                 onClick={handleEstimate}
@@ -230,12 +230,12 @@ export function CardEditForm({
                   </button>
                 )}
                 <p className="mt-1 text-xs text-zinc-400">
-                  Estimate from model knowledge, not a live market feed.
+                  Estimate based on recent comparable sales, for reference only.
                 </p>
               </div>
             ) : (
               <p className="mt-1 text-xs text-zinc-500">
-                Confirm the identification to enable an AI ballpark. You set the final value.
+                Confirm the identification to enable a value estimate. You set the final value.
               </p>
             )}
           </div>
@@ -247,7 +247,7 @@ export function CardEditForm({
             value={f.fmv_notes}
             onChange={(e) => set("fmv_notes", e.target.value)}
             rows={2}
-            className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white"
           />
         </div>
       </section>
@@ -262,7 +262,7 @@ export function CardEditForm({
             <select
               value={f.submitter_id}
               onChange={(e) => set("submitter_id", e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white"
             >
               <option value="">— none —</option>
               {submitters.map((s) => (
@@ -277,7 +277,7 @@ export function CardEditForm({
             <select
               value={f.intent}
               onChange={(e) => set("intent", e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white"
             >
               {CARD_INTENTS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -291,7 +291,7 @@ export function CardEditForm({
             <select
               value={f.status}
               onChange={(e) => set("status", e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white"
             >
               {CARD_STATUSES.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -344,7 +344,7 @@ function TextField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+        className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white"
       />
     </div>
   );

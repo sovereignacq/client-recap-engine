@@ -49,17 +49,63 @@ export type IdentifyState =
   | {
       ok: true;
       imagePath: string;
+      imageBackPath: string | null;
       previewUrl: string | null;
+      previewBackUrl: string | null;
       identification: Identification;
       model: string | null;
-      aiError: string | null;
+      recognitionError: string | null;
     }
   | { ok: false; error: string };
 
+type UploadedImage = {
+  path: string;
+  previewUrl: string | null;
+  base64: string;
+  mimeType: string;
+};
+
 /**
- * Upload a card photo to private storage and run vision identification.
- * The upload always succeeds-or-fails first; if the AI call then fails we still
- * return the stored image so the operator can identify the card by hand.
+ * Validate + store one uploaded image in the private bucket. Returns the stored
+ * path, a signed preview URL, and the bytes (for recognition). On a validation
+ * problem returns an { error } string instead.
+ */
+async function uploadImage(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  file: File,
+): Promise<UploadedImage | { error: string }> {
+  if (file.size > MAX_IMAGE_BYTES) {
+    return { error: "Image is too large (max 10MB)." };
+  }
+  const ext = MIME_EXT[file.type];
+  if (!ext) {
+    return { error: "Unsupported image type. Use JPEG, PNG, WEBP, or HEIC." };
+  }
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, buffer, { contentType: file.type, upsert: false });
+  if (error) return { error: `Upload failed: ${error.message}` };
+
+  const { data: signed } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(path, 60 * 60);
+
+  return {
+    path,
+    previewUrl: signed?.signedUrl ?? null,
+    base64: buffer.toString("base64"),
+    mimeType: file.type,
+  };
+}
+
+/**
+ * Upload the front (and optional back) photo to private storage and run
+ * identification on both. The uploads happen first; if recognition then fails
+ * we still return the stored images so the operator can fill the card in by hand.
+ * The back photo is important for accurate grading.
  */
 export async function identifyCardAction(
   formData: FormData,
@@ -70,37 +116,28 @@ export async function identifyCardAction(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
 
-  const file = formData.get("image");
+  const frontFile = formData.get("image_front");
+  const backFile = formData.get("image_back");
   const hint = String(formData.get("hint") ?? "").trim() || null;
 
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: "Choose a photo of the card to identify." };
-  }
-  if (file.size > MAX_IMAGE_BYTES) {
-    return { ok: false, error: "Image is too large (max 10MB)." };
-  }
-  const ext = MIME_EXT[file.type];
-  if (!ext) {
-    return {
-      ok: false,
-      error: "Unsupported image type. Use JPEG, PNG, WEBP, or HEIC.",
-    };
+  if (!(frontFile instanceof File) || frontFile.size === 0) {
+    return { ok: false, error: "Add a photo of the front of the card." };
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const imagePath = `${user.id}/${crypto.randomUUID()}.${ext}`;
+  const front = await uploadImage(supabase, user.id, frontFile);
+  if ("error" in front) return { ok: false, error: front.error };
 
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(imagePath, buffer, { contentType: file.type, upsert: false });
-  if (uploadError) {
-    return { ok: false, error: `Upload failed: ${uploadError.message}` };
+  let back: UploadedImage | null = null;
+  if (backFile instanceof File && backFile.size > 0) {
+    const r = await uploadImage(supabase, user.id, backFile);
+    if ("error" in r) return { ok: false, error: `Back photo: ${r.error}` };
+    back = r;
   }
 
-  const { data: signed } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(imagePath, 60 * 60);
-  const previewUrl = signed?.signedUrl ?? null;
+  const images = [
+    { base64: front.base64, mimeType: front.mimeType },
+    ...(back ? [{ base64: back.base64, mimeType: back.mimeType }] : []),
+  ];
 
   const empty: Identification = {
     category: "",
@@ -115,18 +152,20 @@ export async function identifyCardAction(
     notes: "",
   };
 
+  const base = {
+    ok: true as const,
+    imagePath: front.path,
+    imageBackPath: back?.path ?? null,
+    previewUrl: front.previewUrl,
+    previewBackUrl: back?.previewUrl ?? null,
+  };
+
   try {
-    const r = await identifyCard({
-      imageBase64: buffer.toString("base64"),
-      mimeType: file.type,
-      hint,
-    });
+    const r = await identifyCard({ images, hint });
     return {
-      ok: true,
-      imagePath,
-      previewUrl,
+      ...base,
       model: r.model,
-      aiError: null,
+      recognitionError: null,
       identification: {
         category: r.category,
         sportOrGame: r.sportOrGame,
@@ -142,14 +181,7 @@ export async function identifyCardAction(
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Identification failed.";
-    return {
-      ok: true,
-      imagePath,
-      previewUrl,
-      model: null,
-      aiError: msg,
-      identification: empty,
-    };
+    return { ...base, model: null, recognitionError: msg, identification: empty };
   }
 }
 
@@ -312,6 +344,8 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
       intent,
       status,
       image_path: String(formData.get("image_path") ?? "").trim() || null,
+      image_back_path:
+        String(formData.get("image_back_path") ?? "").trim() || null,
     })
     .select("id")
     .single();
@@ -421,15 +455,18 @@ export async function deleteCardAction(cardId: string): Promise<void> {
 
   const { data: card } = await supabase
     .from("cards")
-    .select("image_path")
+    .select("image_path, image_back_path")
     .eq("id", cardId)
     .eq("owner_id", user.id)
     .maybeSingle();
 
   await supabase.from("cards").delete().eq("id", cardId).eq("owner_id", user.id);
 
-  if (card?.image_path) {
-    await supabase.storage.from(BUCKET).remove([card.image_path]);
+  const paths = [card?.image_path, card?.image_back_path].filter(
+    (p): p is string => Boolean(p),
+  );
+  if (paths.length) {
+    await supabase.storage.from(BUCKET).remove(paths);
   }
 
   revalidatePath("/dashboard/cards");

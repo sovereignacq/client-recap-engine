@@ -35,7 +35,7 @@ export default async function PricingPage() {
             <p className="text-sm text-zinc-600 dark:text-zinc-400">forever</p>
 
             <ul className="mt-6 space-y-2 text-sm">
-              <li>• AI photo identification</li>
+              <li>• Photo identification</li>
               <li>• Serialized card records</li>
               <li>• Submitter log</li>
             </ul>
@@ -81,8 +81,8 @@ export default async function PricingPage() {
 
             <ul className="mt-6 space-y-2 text-sm">
               <li>• Unlimited cards &amp; submitters</li>
-              <li>• Priority AI identification</li>
-              <li>• AI value estimates</li>
+              <li>• Priority identification</li>
+              <li>• Value estimates</li>
               <li>• 14-day free trial, no card holds</li>
             </ul>
 

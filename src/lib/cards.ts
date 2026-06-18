@@ -28,7 +28,7 @@ export const CARD_STATUSES = [
 
 export const ID_STATUSES = [
   { value: "unidentified", label: "Unidentified" },
-  { value: "ai_suggested", label: "AI suggested" },
+  { value: "ai_suggested", label: "Suggested" },
   { value: "confirmed", label: "Confirmed" },
 ] as const;
 

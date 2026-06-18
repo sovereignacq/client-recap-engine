@@ -45,6 +45,18 @@ type Estimate = {
   rationale: string;
 };
 
+// Shared minimalist styles
+const INPUT =
+  "mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white";
+const LABEL =
+  "text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500";
+const SECTION =
+  "text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400";
+const BTN_PRIMARY =
+  "inline-flex items-center justify-center rounded-none bg-black px-5 py-3 text-xs font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200";
+const BTN_GHOST =
+  "inline-flex items-center justify-center rounded-none border border-black/20 bg-transparent px-5 py-3 text-xs font-medium uppercase tracking-[0.15em] text-black transition hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:text-white dark:hover:bg-white/10";
+
 export function NewCardForm({
   submitters,
   defaultSubmitterId,
@@ -69,9 +81,11 @@ export function NewCardForm({
   const [idModel, setIdModel] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
-  // Image
+  // Images
   const [imagePath, setImagePath] = useState<string | null>(null);
+  const [imageBackPath, setImageBackPath] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewBackUrl, setPreviewBackUrl] = useState<string | null>(null);
 
   // Value
   const [estimate, setEstimate] = useState<Estimate | null>(null);
@@ -98,11 +112,13 @@ export function NewCardForm({
         return;
       }
       setImagePath(r.imagePath);
+      setImageBackPath(r.imageBackPath);
       setPreviewUrl(r.previewUrl);
+      setPreviewBackUrl(r.previewBackUrl);
       setIdModel(r.model);
-      if (r.aiError) {
+      if (r.recognitionError) {
         setError(
-          `Photo saved, but identification failed: ${r.aiError}. Enter the details manually.`,
+          `Photos saved, but automatic identification didn't return a result. Enter the details manually.`,
         );
         setConfidence(null);
       } else {
@@ -131,7 +147,9 @@ export function NewCardForm({
     setIdNotes("");
     setIdModel(null);
     setImagePath(null);
+    setImageBackPath(null);
     setPreviewUrl(null);
+    setPreviewBackUrl(null);
     setPhase("details");
   };
 
@@ -179,11 +197,14 @@ export function NewCardForm({
     fd.set("submitter_id", submitterId);
     fd.set("fmv", fmv);
     fd.set("fmv_notes", fmvNotes);
-    fd.set("id_status", confirmed ? "confirmed" : confidence !== null ? "ai_suggested" : "unidentified");
+    fd.set(
+      "id_status",
+      confirmed ? "confirmed" : confidence !== null ? "ai_suggested" : "unidentified",
+    );
     if (confidence !== null) fd.set("id_confidence", String(confidence));
     if (idModel) fd.set("id_model", idModel);
     if (imagePath) fd.set("image_path", imagePath);
-    // Store the identification snapshot for the record/audit trail.
+    if (imageBackPath) fd.set("image_back_path", imageBackPath);
     fd.set(
       "id_raw",
       JSON.stringify({ ...id, confidence, notes: idNotes, model: idModel }),
@@ -201,50 +222,39 @@ export function NewCardForm({
   // ---------------- Upload phase ----------------
   if (phase === "upload") {
     return (
-      <form onSubmit={handleIdentify} className="space-y-4">
-        <div>
-          <label className="text-sm font-medium">Card photo</label>
-          <input
-            name="image"
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
+      <form onSubmit={handleIdentify} className="space-y-6">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Uploader
+            name="image_front"
+            label="Front"
             required={aiConfigured}
-            className="mt-1 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-zinc-800 dark:file:bg-white dark:file:text-zinc-900"
+            hint="Used to identify the card."
           />
-          <p className="mt-1 text-xs text-zinc-500">
-            Clear, well-lit photo of the front. JPEG/PNG/WEBP/HEIC, max 10MB.
-          </p>
+          <Uploader
+            name="image_back"
+            label="Back"
+            required={false}
+            hint="Recommended — needed for accurate grading."
+          />
         </div>
 
         <div>
-          <label className="text-sm font-medium">Hint (optional)</label>
+          <label className={LABEL}>Hint (optional)</label>
           <input
             name="hint"
-            placeholder="Anything the submitter told you — e.g. '2018 Prizm Luka rookie, silver'"
-            className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            placeholder="e.g. 2018 Prizm Luka rookie, silver"
+            className={INPUT}
           />
         </div>
 
-        {error && (
-          <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
-            {error}
-          </p>
-        )}
+        {error && <ErrorBox>{error}</ErrorBox>}
 
         <div className="flex flex-wrap gap-3">
-          <button
-            type="submit"
-            disabled={!aiConfigured || isIdentifying}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-          >
+          <button type="submit" disabled={!aiConfigured || isIdentifying} className={BTN_PRIMARY}>
             {isIdentifying ? "Identifying…" : "Identify card"}
           </button>
-          <button
-            type="button"
-            onClick={handleManual}
-            className="rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
-          >
-            Enter manually instead
+          <button type="button" onClick={handleManual} className={BTN_GHOST}>
+            Enter manually
           </button>
         </div>
       </form>
@@ -257,45 +267,40 @@ export function NewCardForm({
     confirmed && (id.playerOrCharacter.trim() || id.setName.trim());
 
   return (
-    <div className="space-y-6">
-      {previewUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={previewUrl}
-          alt="Card"
-          className="max-h-72 w-auto rounded-lg border border-zinc-200 dark:border-zinc-800"
-        />
+    <div className="space-y-8">
+      {(previewUrl || previewBackUrl) && (
+        <div className="flex flex-wrap gap-3">
+          {previewUrl && <Thumb src={previewUrl} label="Front" />}
+          {previewBackUrl && <Thumb src={previewBackUrl} label="Back" />}
+        </div>
       )}
 
       {confidence !== null && (
         <div
-          className={`rounded-md border px-3 py-2 text-sm ${
+          className={`border-l-2 px-4 py-3 text-sm ${
             lowConfidence
-              ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
-              : "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+              ? "border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+              : "border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
           }`}
         >
-          AI identification confidence:{" "}
-          <span className="font-semibold">
-            {Math.round(confidence * 100)}%
-          </span>
-          {lowConfidence && " — low. Verify every field against the card before confirming."}
+          Match confidence:{" "}
+          <span className="font-semibold">{Math.round(confidence * 100)}%</span>
+          {lowConfidence &&
+            " — low. Verify every field against the card before confirming."}
           {idNotes && <p className="mt-1 text-xs opacity-90">{idNotes}</p>}
         </div>
       )}
 
       {/* Identification */}
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          Identification
-        </h2>
+        <h2 className={SECTION}>Identification</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="text-sm font-medium">Category</label>
+            <label className={LABEL}>Category</label>
             <select
               value={id.category}
               onChange={(e) => setIdField("category", e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className={INPUT}
             >
               <option value="">—</option>
               {CARD_CATEGORIES.map((o) => (
@@ -305,44 +310,16 @@ export function NewCardForm({
               ))}
             </select>
           </div>
-          <TextField
-            label="Sport / game"
-            value={id.sportOrGame}
-            onChange={(v) => setIdField("sportOrGame", v)}
-          />
-          <TextField
-            label="Player / character"
-            value={id.playerOrCharacter}
-            onChange={(v) => setIdField("playerOrCharacter", v)}
-          />
-          <TextField
-            label="Year / season"
-            value={id.cardYear}
-            onChange={(v) => setIdField("cardYear", v)}
-          />
-          <TextField
-            label="Manufacturer"
-            value={id.manufacturer}
-            onChange={(v) => setIdField("manufacturer", v)}
-          />
-          <TextField
-            label="Set"
-            value={id.setName}
-            onChange={(v) => setIdField("setName", v)}
-          />
-          <TextField
-            label="Card number"
-            value={id.cardNumber}
-            onChange={(v) => setIdField("cardNumber", v)}
-          />
-          <TextField
-            label="Variant / parallel"
-            value={id.variant}
-            onChange={(v) => setIdField("variant", v)}
-          />
+          <TextField label="Sport / game" value={id.sportOrGame} onChange={(v) => setIdField("sportOrGame", v)} />
+          <TextField label="Player / character" value={id.playerOrCharacter} onChange={(v) => setIdField("playerOrCharacter", v)} />
+          <TextField label="Year / season" value={id.cardYear} onChange={(v) => setIdField("cardYear", v)} />
+          <TextField label="Manufacturer" value={id.manufacturer} onChange={(v) => setIdField("manufacturer", v)} />
+          <TextField label="Set" value={id.setName} onChange={(v) => setIdField("setName", v)} />
+          <TextField label="Card number" value={id.cardNumber} onChange={(v) => setIdField("cardNumber", v)} />
+          <TextField label="Variant / parallel" value={id.variant} onChange={(v) => setIdField("variant", v)} />
         </div>
 
-        <label className="flex items-start gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
+        <label className="flex items-start gap-3 border border-black/15 px-4 py-3 text-sm dark:border-white/20">
           <input
             type="checkbox"
             checked={confirmed}
@@ -363,54 +340,40 @@ export function NewCardForm({
 
       {/* Grade + value */}
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          Grade &amp; value
-        </h2>
+        <h2 className={SECTION}>Grade &amp; value</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextField
-            label="Grade / condition"
-            value={grade}
-            onChange={setGrade}
-            placeholder="e.g. PSA 10, BGS 9.5, Raw — NM"
-          />
+          <TextField label="Grade / condition" value={grade} onChange={setGrade} placeholder="e.g. PSA 10, BGS 9.5, Raw — NM" />
           <div>
-            <label className="text-sm font-medium">
-              Fair market value (USD)
-            </label>
+            <label className={LABEL}>Fair market value (USD)</label>
             <input
               value={fmv}
               onChange={(e) => setFmv(e.target.value)}
               inputMode="decimal"
               placeholder="0.00"
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+              className={INPUT}
             />
           </div>
         </div>
 
-        <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+        <div className="border border-black/15 p-4 dark:border-white/20">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium">AI value estimate</p>
+            <p className={LABEL}>Value estimate</p>
             <button
               type="button"
               onClick={handleEstimate}
               disabled={!canEstimate || isEstimating}
-              title={
-                canEstimate
-                  ? undefined
-                  : "Confirm the identification first"
-              }
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              title={canEstimate ? undefined : "Confirm the identification first"}
+              className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
             >
-              {isEstimating ? "Estimating…" : "Estimate value"}
+              {isEstimating ? "Estimating…" : "Estimate"}
             </button>
           </div>
           {estimate ? (
-            <div className="mt-2 text-sm">
+            <div className="mt-3 text-sm">
               <p>
                 Estimated range:{" "}
                 <span className="font-semibold tabular-nums">
-                  {formatMoneyCents(estimate.lowCents)} –{" "}
-                  {formatMoneyCents(estimate.highCents)}
+                  {formatMoneyCents(estimate.lowCents)} – {formatMoneyCents(estimate.highCents)}
                 </span>{" "}
                 <span className="text-xs text-zinc-500">
                   ({Math.round(estimate.confidence * 100)}% confidence)
@@ -422,53 +385,44 @@ export function NewCardForm({
               {estimate.highCents > 0 && (
                 <button
                   type="button"
-                  onClick={() => {
-                    const mid = (estimate.lowCents + estimate.highCents) / 2;
-                    setFmv((mid / 100).toFixed(2));
-                  }}
-                  className="mt-2 text-xs text-blue-600 hover:underline dark:text-blue-400"
+                  onClick={() =>
+                    setFmv(((estimate.lowCents + estimate.highCents) / 2 / 100).toFixed(2))
+                  }
+                  className="mt-2 text-xs underline underline-offset-2 hover:opacity-70"
                 >
                   Use midpoint as FMV
                 </button>
               )}
-              <p className="mt-1 text-xs text-zinc-400">
-                Estimate from model knowledge, not a live market feed. Verify
-                before relying on it.
+              <p className="mt-2 text-xs text-zinc-400">
+                Estimate based on recent comparable sales, for reference only. You set the final value.
               </p>
             </div>
           ) : (
-            <p className="mt-1 text-xs text-zinc-500">
-              Confirm the identification, then estimate a ballpark range. You
-              always set the final value yourself.
+            <p className="mt-2 text-xs text-zinc-500">
+              Confirm the identification, then estimate a ballpark range. You always set the final value.
             </p>
           )}
         </div>
 
         <div>
-          <label className="text-sm font-medium">Value notes</label>
+          <label className={LABEL}>Value notes</label>
           <textarea
             value={fmvNotes}
             onChange={(e) => setFmvNotes(e.target.value)}
             rows={2}
-            placeholder="Where the value came from — eBay sold comps, agreed payout, etc."
-            className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            placeholder="Where the value came from — sold comps, agreed payout, etc."
+            className={INPUT}
           />
         </div>
       </section>
 
       {/* Record */}
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          Record
-        </h2>
+        <h2 className={SECTION}>Record</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
-            <label className="text-sm font-medium">Submitter</label>
-            <select
-              value={submitterId}
-              onChange={(e) => setSubmitterId(e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-            >
+            <label className={LABEL}>Submitter</label>
+            <select value={submitterId} onChange={(e) => setSubmitterId(e.target.value)} className={INPUT}>
               <option value="">— none —</option>
               {submitters.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -478,12 +432,8 @@ export function NewCardForm({
             </select>
           </div>
           <div>
-            <label className="text-sm font-medium">Intent</label>
-            <select
-              value={intent}
-              onChange={(e) => setIntent(e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-            >
+            <label className={LABEL}>Intent</label>
+            <select value={intent} onChange={(e) => setIntent(e.target.value)} className={INPUT}>
               {CARD_INTENTS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -492,12 +442,8 @@ export function NewCardForm({
             </select>
           </div>
           <div>
-            <label className="text-sm font-medium">Status</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-            >
+            <label className={LABEL}>Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className={INPUT}>
               {CARD_STATUSES.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -513,20 +459,11 @@ export function NewCardForm({
         )}
       </section>
 
-      {error && (
-        <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBox>{error}</ErrorBox>}
 
-      <div className="flex gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={isSaving}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-        >
-          {isSaving ? "Saving…" : "Save & serialize card"}
+      <div className="flex gap-3 border-t border-black/10 pt-5 dark:border-white/15">
+        <button type="button" onClick={handleSave} disabled={isSaving} className={BTN_PRIMARY}>
+          {isSaving ? "Saving…" : "Save & serialize"}
         </button>
         <button
           type="button"
@@ -535,12 +472,64 @@ export function NewCardForm({
             setError(null);
           }}
           disabled={isSaving}
-          className="rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          className={BTN_GHOST}
         >
           Start over
         </button>
       </div>
     </div>
+  );
+}
+
+function Uploader({
+  name,
+  label,
+  required,
+  hint,
+}: {
+  name: string;
+  label: string;
+  required: boolean;
+  hint: string;
+}) {
+  const [fileName, setFileName] = useState<string | null>(null);
+  return (
+    <label className="flex cursor-pointer flex-col gap-2 border border-dashed border-black/20 px-4 py-6 text-center transition hover:border-black dark:border-white/25 dark:hover:border-white">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+        {label}
+        {!required && <span className="ml-1 normal-case tracking-normal text-zinc-400">(optional)</span>}
+      </span>
+      <span className="truncate text-sm">{fileName ?? "Choose photo"}</span>
+      <span className="text-[11px] text-zinc-400">{hint}</span>
+      <input
+        name={name}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
+        required={required}
+        onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+        className="sr-only"
+      />
+    </label>
+  );
+}
+
+function Thumb({ src, label }: { src: string; label: string }) {
+  return (
+    <figure className="space-y-1">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={label} className="max-h-56 w-auto border border-black/10 dark:border-white/15" />
+      <figcaption className="text-[11px] uppercase tracking-[0.15em] text-zinc-400">
+        {label}
+      </figcaption>
+    </figure>
+  );
+}
+
+function ErrorBox({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="border-l-2 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+      {children}
+    </p>
   );
 }
 
@@ -557,12 +546,12 @@ function TextField({
 }) {
   return (
     <div>
-      <label className="text-sm font-medium">{label}</label>
+      <label className={LABEL}>{label}</label>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+        className={INPUT}
       />
     </div>
   );
