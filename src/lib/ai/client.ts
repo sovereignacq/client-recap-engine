@@ -184,21 +184,30 @@ export async function identifyCard(input: {
       ? "Two photos are provided: the FIRST is the front of the card, the SECOND is the back. Use the front to identify the card and the back to confirm the set, card number, and condition."
       : "One photo is provided: the front of the card.";
 
-  const prompt = `You are a meticulous trading-card identification expert covering BOTH sports cards (Topps, Panini, Bowman, Upper Deck, Donruss, etc.) and trading card games (Pokémon, Magic: The Gathering, Yu-Gi-Oh!, etc.).
-
-Identify the card in the image(s) as precisely as the image allows.
+  const prompt = `You are a meticulous trading-card identification expert. In practice the cards you see are USUALLY sports cards (Topps, Panini, Bowman, Upper Deck, Donruss, Fleer, etc.) or Pokémon, with the occasional One Piece or other TCG. Identify the card in the image(s) as precisely as the image allows.
 
 ${imageNote}
 
 ${hintLine}
 
+HOW TO IDENTIFY (cross-reference every visible cue, don't rely on one)
+1. Decide the type first:
+   - Pokémon: energy symbols, HP in the top corner, attacks/abilities, a set symbol + a collector number like "4/102" (often bottom-left/right of the front), and a copyright line on the front bottom edge.
+   - One Piece TCG: "ONE PIECE CARD GAME" wording, a cost/power layout, card code like "OP01-001".
+   - Sports: a real athlete photo, a team, a league logo (NBA/NFL/MLB/etc.). The BACK usually prints the set name, a card number (e.g. "No. 280"), the year/season, stats, and copyright — READ THE BACK for these.
+2. Player/character: the athlete's name (sports) or the Pokémon/character name (TCG), exactly as printed.
+3. card_year: the copyright/season year as printed (season form like "2020-21" when shown).
+4. set_name: the printed set/product name (e.g. "Prizm", "Base Set", "Topps Chrome", "Scarlet & Violet 151").
+5. card_number: the collector number EXACTLY as printed ("280", "4/102", "OP01-001").
+6. variant: any parallel / insert / edition / finish (e.g. "Silver Prizm", "Refractor", "Reverse Holo", "1st Edition", "Illustration Rare", "/99" serial-numbered). Empty if it's a plain base card.
+7. sport_or_game: the specific game or sport spelled out — "Pokémon", "One Piece", "Basketball", "Baseball", "Football", "Soccer", etc.
+8. category: "sports" for athlete cards, "tcg" for Pokémon/One Piece/Magic/Yu-Gi-Oh!, otherwise "other".
+
 CRITICAL ACCURACY RULES
-- Read ONLY what is actually visible. NEVER invent or guess a value you cannot read on the card.
-- If a field is not legible or not present, return an empty string "" for it — do not fill it from assumption.
-- Set "confidence" to your honest probability (0.0–1.0) that the WHOLE identification (year + set + player/character + card number + variant together) is correct. A great photo of a common base card can be ~0.95; a blurry photo or an ambiguous parallel should be well below 0.5.
-- Distinguish base cards from parallels/inserts/variations carefully (e.g. "Silver Prizm", "Refractor", "1st Edition", "Holo", "/99" serial-numbered). Put that in "variant".
-- "card_year" is the card's copyright/season year as printed (use season form like "2020-21" when shown).
-- Use "notes" to flag anything uncertain, what's blurry, any visible condition issues on the front or back, or why confidence is low.
+- Read ONLY what is actually visible. NEVER invent a value you cannot read. If a field isn't legible or present, return "" for it.
+- Use BOTH photos when two are given — the back frequently carries the set, number, and year that the front omits.
+- "confidence" is your honest probability (0.0–1.0) that the WHOLE identification is correct together. Crisp photo of a clearly-marked card ≈ 0.9+; blurry, cropped, or ambiguous parallel ≤ 0.5.
+- Put anything uncertain, unreadable, or any visible condition issue (front or back) in "notes".
 
 OUTPUT
 Respond with ONLY one JSON object, no markdown, no commentary.`;

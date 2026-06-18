@@ -9,7 +9,12 @@ import {
   formatMoneyCents,
 } from "@/lib/cards";
 import { createClient } from "@/lib/supabase/client";
-import { identifyByPathsAction, estimateFmvAction, createCardAction } from "../actions";
+import {
+  identifyByPathsAction,
+  estimateFmvAction,
+  createCardAction,
+  type IdentifyReference,
+} from "../actions";
 
 type Submitter = { id: string; name: string };
 
@@ -93,6 +98,7 @@ export function NewCardForm({
   const [idNotes, setIdNotes] = useState("");
   const [idModel, setIdModel] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [reference, setReference] = useState<IdentifyReference | null>(null);
 
   // Stored image paths + local previews
   const [imagePath, setImagePath] = useState<string | null>(null);
@@ -148,6 +154,7 @@ export function NewCardForm({
           return;
         }
         setIdModel(r.model);
+        setReference(r.reference);
         if (r.recognitionError) {
           setError("Photos saved, but automatic identification didn't return a result. Enter the details manually.");
           setConfidence(null);
@@ -179,6 +186,7 @@ export function NewCardForm({
     setConfidence(null);
     setIdNotes("");
     setIdModel(null);
+    setReference(null);
     setImagePath(null);
     setImageBackPath(null);
     setPreviewUrl(null);
@@ -310,6 +318,39 @@ export function NewCardForm({
         <div className="flex flex-wrap gap-3">
           {previewUrl && <Thumb src={previewUrl} label="Front" />}
           {previewBackUrl && <Thumb src={previewBackUrl} label="Back" />}
+        </div>
+      )}
+
+      {reference && (
+        <div className="border-l-2 border-blue-500 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+          <p className="font-medium">{reference.label}</p>
+          {reference.marketPriceCents !== null && (
+            <p className="mt-1">
+              Market price (reference):{" "}
+              <span className="font-semibold tabular-nums">
+                {formatMoneyCents(reference.marketPriceCents)}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setFmv((reference.marketPriceCents! / 100).toFixed(2))
+                }
+                className="ml-3 text-xs underline underline-offset-2 hover:opacity-70"
+              >
+                Use as FMV
+              </button>
+            </p>
+          )}
+          {reference.url && (
+            <a
+              href={reference.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-block text-xs underline underline-offset-2 opacity-80 hover:opacity-100"
+            >
+              View market data ↗
+            </a>
+          )}
         </div>
       )}
 

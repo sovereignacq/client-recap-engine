@@ -8,6 +8,7 @@ import {
   estimateCardValue,
   type CardCategory,
 } from "@/lib/ai/client";
+import { lookupPokemonCard } from "@/lib/pokemon";
 
 const BUCKET = "card-images";
 
@@ -36,12 +37,20 @@ type Identification = {
   notes: string;
 };
 
+export type IdentifyReference = {
+  label: string;
+  marketPriceCents: number | null;
+  imageUrl: string | null;
+  url: string | null;
+};
+
 export type IdentifyState =
   | {
       ok: true;
       identification: Identification;
       model: string | null;
       recognitionError: string | null;
+      reference: IdentifyReference | null;
     }
   | { ok: false; error: string };
 
@@ -91,7 +100,7 @@ export async function identifyByPathsAction(input: {
 
   const front = await downloadImage(supabase, input.frontPath);
   if (!front) {
-    return { ok: true, model: null, recognitionError: "Could not read the uploaded front photo.", identification: empty };
+    return { ok: true, model: null, recognitionError: "Could not read the uploaded front photo.", identification: empty, reference: null };
   }
   const back = input.backPath ? await downloadImage(supabase, input.backPath) : null;
 
@@ -99,26 +108,54 @@ export async function identifyByPathsAction(input: {
 
   try {
     const r = await identifyCard({ images, hint: input.hint });
+    const ident: Identification = {
+      category: r.category,
+      sportOrGame: r.sportOrGame,
+      playerOrCharacter: r.playerOrCharacter,
+      cardYear: r.cardYear,
+      manufacturer: r.manufacturer,
+      setName: r.setName,
+      cardNumber: r.cardNumber,
+      variant: r.variant,
+      confidence: r.confidence,
+      notes: r.notes,
+    };
+
+    // Cross-reference Pokémon cards against the Pokémon TCG database to confirm
+    // the read and pull a real market price. Best-effort; failures are ignored.
+    let reference: IdentifyReference | null = null;
+    if (/pok[eé]mon/i.test(r.sportOrGame) && r.playerOrCharacter) {
+      const match = await lookupPokemonCard({
+        name: r.playerOrCharacter,
+        number: r.cardNumber || null,
+        setName: r.setName || null,
+      });
+      if (match) {
+        // Trust the database over the vision read for these canonical fields.
+        ident.playerOrCharacter = match.name || ident.playerOrCharacter;
+        ident.setName = match.setName || ident.setName;
+        ident.cardNumber = match.number || ident.cardNumber;
+        if (!ident.variant && match.rarity) ident.variant = match.rarity;
+        ident.confidence = Math.max(ident.confidence, 0.9);
+        reference = {
+          label: `Matched in Pokémon TCG database — ${match.name} · ${match.setName} ${match.number}${match.rarity ? ` · ${match.rarity}` : ""}`,
+          marketPriceCents: match.marketPriceCents,
+          imageUrl: match.imageUrl,
+          url: match.url,
+        };
+      }
+    }
+
     return {
       ok: true,
       model: r.model,
       recognitionError: null,
-      identification: {
-        category: r.category,
-        sportOrGame: r.sportOrGame,
-        playerOrCharacter: r.playerOrCharacter,
-        cardYear: r.cardYear,
-        manufacturer: r.manufacturer,
-        setName: r.setName,
-        cardNumber: r.cardNumber,
-        variant: r.variant,
-        confidence: r.confidence,
-        notes: r.notes,
-      },
+      identification: ident,
+      reference,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Identification failed.";
-    return { ok: true, model: null, recognitionError: msg, identification: empty };
+    return { ok: true, model: null, recognitionError: msg, identification: empty, reference: null };
   }
 }
 
