@@ -3,7 +3,12 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
-import { openPackAction, type OpenResult } from "./actions";
+import {
+  openPackAction,
+  topUpAction,
+  sellBackAction,
+  type OpenResult,
+} from "./actions";
 
 export type Bucket = {
   key: string;
@@ -17,6 +22,7 @@ export type Tier = {
   name: string;
   priceCents: number;
   odds: Bucket[];
+  pityThreshold: number;
 };
 export type Mode = {
   key: string;
@@ -30,27 +36,39 @@ const OUTCOME_LABEL: Record<string, string> = {
   even: "Break-even",
   above: "Above",
 };
-
 const MODE_DESC: Record<string, string> = {
   normal: "Balanced odds.",
   high: "Polarized — more downside, bigger upside.",
   max: "All or nothing — only Below or Jackpot.",
 };
+const TOPUP_PRESETS = [500, 2000, 5000, 10000];
+
+type Won = Extract<OpenResult, { ok: true }>;
 
 export function BuyClient({
   tiers,
   modes,
   poolAvailable,
+  balance: initialBalance,
+  pityByTier: initialPity,
 }: {
   tiers: Tier[];
   modes: Mode[];
   poolAvailable: boolean;
+  balance: number;
+  pityByTier: Record<string, number>;
 }) {
   const router = useRouter();
   const [isOpening, startOpen] = useTransition();
+  const [isFunding, startFund] = useTransition();
+  const [isSelling, startSell] = useTransition();
   const [openingKey, setOpeningKey] = useState<string | null>(null);
-  const [result, setResult] = useState<Extract<OpenResult, { ok: true }> | null>(null);
+  const [result, setResult] = useState<Won | null>(null);
+  const [sold, setSold] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [balance, setBalance] = useState(initialBalance);
+  const [pity, setPity] = useState<Record<string, number>>(initialPity);
 
   const [modeKey, setModeKey] = useState(modes[0]?.key ?? "normal");
   const mode = useMemo(
@@ -64,14 +82,66 @@ export function BuyClient({
     startOpen(async () => {
       const r = await openPackAction(tier.key, modeKey);
       setOpeningKey(null);
-      if (r.ok) setResult(r);
+      if (r.ok) {
+        setBalance(r.balanceAfter);
+        setPity((p) => ({ ...p, [tier.key]: r.pityCount }));
+        setSold(false);
+        setResult(r);
+      } else {
+        setError(r.error);
+      }
+    });
+  };
+
+  const addFunds = (cents: number) => {
+    setError(null);
+    startFund(async () => {
+      const r = await topUpAction(cents);
+      if (r.ok) setBalance(r.balance);
       else setError(r.error);
+    });
+  };
+
+  const sellBack = (won: Won) => {
+    startSell(async () => {
+      const r = await sellBackAction(won.cardId);
+      if (r.ok) {
+        setBalance(r.balance);
+        setSold(true);
+      } else {
+        setError(r.error);
+      }
     });
   };
 
   return (
     <section className="space-y-5">
-      {/* Odds level selector */}
+      {/* Wallet */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border border-black/10 px-5 py-4 dark:border-white/15">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+            Wallet
+          </p>
+          <p className="text-2xl font-semibold tabular-nums">
+            {formatMoneyCents(balance)}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {TOPUP_PRESETS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              disabled={isFunding}
+              onClick={() => addFunds(c)}
+              className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
+            >
+              + {formatMoneyCents(c)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Odds level */}
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
           Odds
@@ -96,9 +166,7 @@ export function BuyClient({
           })}
         </div>
         {mode && (
-          <span className="text-[11px] text-zinc-500">
-            {MODE_DESC[mode.key] ?? ""}
-          </span>
+          <span className="text-[11px] text-zinc-500">{MODE_DESC[mode.key] ?? ""}</span>
         )}
       </div>
 
@@ -122,12 +190,11 @@ export function BuyClient({
             w: b.weight * (mode?.weightMults?.[b.key] ?? 1),
           }));
           const total = adj.reduce((s, b) => s + b.w, 0) || 1;
-          const minCents = Math.round(
-            Math.min(...t.odds.map((b) => b.min_mult)) * effPrice,
-          );
-          const maxCents = Math.round(
-            Math.max(...t.odds.map((b) => b.max_mult)) * effPrice,
-          );
+          const minCents = Math.round(Math.min(...t.odds.map((b) => b.min_mult)) * effPrice);
+          const maxCents = Math.round(Math.max(...t.odds.map((b) => b.max_mult)) * effPrice);
+          const pityCount = pity[t.key] ?? 0;
+          const pityPct = Math.min(100, (pityCount / t.pityThreshold) * 100);
+          const canAfford = balance >= effPrice;
           return (
             <div key={t.key} className="flex flex-col bg-white p-6 dark:bg-black">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
@@ -151,13 +218,30 @@ export function BuyClient({
                     </li>
                   ))}
               </ul>
+
+              <div className="mt-4">
+                <div className="flex justify-between text-[10px] uppercase tracking-[0.12em] text-zinc-400">
+                  <span>Guaranteed win</span>
+                  <span className="tabular-nums">
+                    {pityCount}/{t.pityThreshold}
+                  </span>
+                </div>
+                <div className="mt-1 h-1 w-full bg-black/10 dark:bg-white/15">
+                  <div className="h-full bg-black dark:bg-white" style={{ width: `${pityPct}%` }} />
+                </div>
+              </div>
+
               <button
                 type="button"
                 onClick={() => open(t)}
-                disabled={!poolAvailable || isOpening}
+                disabled={!poolAvailable || isOpening || !canAfford}
                 className="mt-5 rounded-none bg-black px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
               >
-                {openingKey === t.key ? "Opening…" : "Open pack"}
+                {openingKey === t.key
+                  ? "Opening…"
+                  : canAfford
+                    ? "Open pack"
+                    : "Add funds"}
               </button>
             </div>
           );
@@ -167,12 +251,20 @@ export function BuyClient({
       {result && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setResult(null)}
+          onClick={() => {
+            setResult(null);
+            router.refresh();
+          }}
         >
           <div
             className="w-full max-w-sm border border-white/15 bg-black p-8 text-center text-white"
             onClick={(e) => e.stopPropagation()}
           >
+            {result.guaranteed && (
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-300">
+                Guaranteed pull
+              </p>
+            )}
             <p
               className={`text-[11px] font-semibold uppercase tracking-[0.3em] ${
                 result.outcome === "above"
@@ -186,9 +278,7 @@ export function BuyClient({
             </p>
             <h3 className="mt-4 text-lg font-semibold">{result.title}</h3>
             <p className="mt-1 font-mono text-xs text-zinc-400">{result.serial}</p>
-            {result.grade && (
-              <p className="mt-1 text-sm text-zinc-300">{result.grade}</p>
-            )}
+            {result.grade && <p className="mt-1 text-sm text-zinc-300">{result.grade}</p>}
             <p className="mt-5 text-4xl font-semibold tabular-nums">
               {formatMoneyCents(result.fmvCents)}
             </p>
@@ -204,24 +294,39 @@ export function BuyClient({
               {formatMoneyCents(Math.abs(result.profitCents))}
             </p>
 
-            <div className="mt-7 flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setResult(null);
-                  router.refresh();
-                }}
-                className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10"
-              >
-                Close
-              </button>
-              <a
-                href={`/dashboard/cards/${result.cardId}`}
-                className="flex-1 rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200"
-              >
-                View card
-              </a>
-            </div>
+            {sold ? (
+              <p className="mt-6 text-sm text-emerald-400">
+                Sold back · wallet {formatMoneyCents(balance)}
+              </p>
+            ) : (
+              <div className="mt-7 flex gap-3">
+                <button
+                  type="button"
+                  disabled={isSelling}
+                  onClick={() => sellBack(result)}
+                  className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10 disabled:opacity-40"
+                >
+                  {isSelling ? "…" : `Sell back +${formatMoneyCents(result.buybackCents)}`}
+                </button>
+                <a
+                  href={`/dashboard/cards/${result.cardId}`}
+                  className="flex-1 rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200"
+                >
+                  Keep
+                </a>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setResult(null);
+                router.refresh();
+              }}
+              className="mt-3 text-[11px] uppercase tracking-[0.15em] text-zinc-400 hover:text-white"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

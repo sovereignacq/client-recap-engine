@@ -25,7 +25,7 @@ export default async function BuyPage() {
 
   const { data: tierRows } = await supabase
     .from("pack_tiers")
-    .select("key, name, price_cents, odds")
+    .select("key, name, price_cents, odds, pity_threshold")
     .eq("active", true)
     .order("sort_order", { ascending: true });
 
@@ -34,6 +34,7 @@ export default async function BuyPage() {
     name: t.name,
     priceCents: t.price_cents,
     odds: (t.odds as Tier["odds"]) ?? [],
+    pityThreshold: t.pity_threshold ?? 10,
   }));
 
   const { data: modeRows } = await supabase
@@ -52,6 +53,22 @@ export default async function BuyPage() {
   // Pool size via a definer function so customers (who can't read house
   // inventory rows directly) still know whether packs are stocked.
   const { data: poolCount } = await supabase.rpc("pack_pool_count");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("balance_cents")
+    .eq("id", user.id)
+    .maybeSingle();
+  const balance = profile?.balance_cents ?? 0;
+
+  const { data: pityRows } = await supabase
+    .from("pack_pity")
+    .select("tier_key, count")
+    .eq("buyer_id", user.id);
+  const pityByTier: Record<string, number> = {};
+  (pityRows ?? []).forEach((p) => {
+    pityByTier[p.tier_key] = p.count;
+  });
 
   const { data: openings } = await supabase
     .from("pack_openings")
@@ -84,6 +101,8 @@ export default async function BuyPage() {
           tiers={tiers}
           modes={modes}
           poolAvailable={((poolCount as number) ?? 0) > 0}
+          balance={balance}
+          pityByTier={pityByTier}
         />
 
         <section className="space-y-3">
