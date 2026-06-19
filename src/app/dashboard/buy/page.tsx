@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoneyCents } from "@/lib/cards";
-import { BuyClient, type Tier } from "./buy-client";
+import { BuyClient, type Tier, type Mode } from "./buy-client";
 
 export const maxDuration = 30;
 
@@ -36,6 +36,19 @@ export default async function BuyPage() {
     odds: (t.odds as Tier["odds"]) ?? [],
   }));
 
+  const { data: modeRows } = await supabase
+    .from("pack_modes")
+    .select("key, name, price_mult, weight_mults")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+
+  const modes: Mode[] = (modeRows ?? []).map((m) => ({
+    key: m.key,
+    name: m.name,
+    priceMult: Number(m.price_mult),
+    weightMults: (m.weight_mults as Record<string, number>) ?? {},
+  }));
+
   // Pool size via a definer function so customers (who can't read house
   // inventory rows directly) still know whether packs are stocked.
   const { data: poolCount } = await supabase.rpc("pack_pool_count");
@@ -67,7 +80,11 @@ export default async function BuyPage() {
           </p>
         </header>
 
-        <BuyClient tiers={tiers} poolAvailable={((poolCount as number) ?? 0) > 0} />
+        <BuyClient
+          tiers={tiers}
+          modes={modes}
+          poolAvailable={((poolCount as number) ?? 0) > 0}
+        />
 
         <section className="space-y-3">
           <div className="flex items-center justify-between">

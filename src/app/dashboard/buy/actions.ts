@@ -22,14 +22,20 @@ export type OpenResult =
  * Open a tier pack. The draw (odds + inventory pick + ownership transfer) runs
  * atomically in the open_pack() DB function so it can't be gamed client-side.
  */
-export async function openPackAction(tierKey: string): Promise<OpenResult> {
+export async function openPackAction(
+  tierKey: string,
+  mode: string,
+): Promise<OpenResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
 
-  const { data, error } = await supabase.rpc("open_pack", { p_tier: tierKey });
+  const { data, error } = await supabase.rpc("open_pack", {
+    p_tier: tierKey,
+    p_mode: mode,
+  });
   if (error) return { ok: false, error: error.message };
 
   const d = data as {
