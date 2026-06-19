@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/login/actions";
+import { getRole, isStaff } from "@/lib/roles";
 import { ManageBillingButton } from "./billing-button";
 
 type SubRow = {
@@ -47,15 +48,20 @@ export default async function DashboardPage({
 
   const { count: cardsCount } = await supabase
     .from("cards")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", user.id);
 
   const { count: submittersCount } = await supabase
     .from("submitters")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", user.id);
 
   const { count: offersCount } = await supabase
     .from("offers")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", user.id);
+
+  const staff = isStaff(await getRole());
 
   const planLabel = subscription
     ? subscription.plan === "pro_annual"
@@ -74,17 +80,27 @@ export default async function DashboardPage({
               APEX&nbsp;TCG
             </p>
             <p className="mt-1 text-sm text-zinc-500">
-              {profile?.full_name || profile?.email || user.email}
+              My collection · {profile?.full_name || profile?.email || user.email}
             </p>
           </div>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded-none border border-black/20 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
-            >
-              Sign out
-            </button>
-          </form>
+          <div className="flex items-center gap-2">
+            {staff && (
+              <Link
+                href="/admin"
+                className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+              >
+                Back office
+              </Link>
+            )}
+            <form action={logout}>
+              <button
+                type="submit"
+                className="rounded-none border border-black/20 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </header>
 
         {params.checkout === "success" && (

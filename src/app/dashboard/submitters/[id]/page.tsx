@@ -25,6 +25,7 @@ export default async function SubmitterDetailPage({
     .from("submitters")
     .select("id, name, email, phone, address, notes, created_at")
     .eq("id", id)
+    .eq("owner_id", user.id)
     .maybeSingle();
 
   if (!submitter) notFound();
@@ -35,6 +36,7 @@ export default async function SubmitterDetailPage({
       "id, serial, status, fmv_cents, fmv_currency, card_year, manufacturer, set_name, player_or_character, card_number, variant, created_at",
     )
     .eq("submitter_id", id)
+    .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
   return (

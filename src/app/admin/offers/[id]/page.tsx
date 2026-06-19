@@ -1,40 +1,30 @@
 import Link from "next/link";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { cardTitle, formatMoneyCents } from "@/lib/cards";
 import { OFFER_STATUSES, PAYOUT_METHODS, offerLabel } from "@/lib/offers";
-import { OfferControls } from "./offer-controls";
-import { DeleteOfferButton } from "./delete-button";
+import { AdminOfferStatusControl } from "./status-control";
 
-export default async function OfferDetailPage({
+export default async function AdminOfferDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
 
   const { data: offer } = await supabase
     .from("offers")
     .select("*")
     .eq("id", id)
-    .eq("owner_id", user.id)
     .maybeSingle();
   if (!offer) notFound();
 
-  const submitter = offer.submitter_id
-    ? (
-        await supabase
-          .from("submitters")
-          .select("id, name")
-          .eq("id", offer.submitter_id)
-          .maybeSingle()
-      ).data
-    : null;
+  const { data: customer } = await supabase
+    .from("profiles")
+    .select("email, full_name")
+    .eq("id", offer.owner_id)
+    .maybeSingle();
 
   const { data: itemRows } = await supabase
     .from("offer_items")
@@ -48,7 +38,6 @@ export default async function OfferDetailPage({
     return {
       id: it.id,
       amountCents: it.amount_cents as number,
-      cardId: card?.id as string | undefined,
       serial: card?.serial as string | undefined,
       title: card ? cardTitle(card) : "Card removed",
     };
@@ -58,10 +47,10 @@ export default async function OfferDetailPage({
     <main className="flex flex-1 flex-col items-center px-4 py-12">
       <div className="w-full max-w-2xl space-y-6">
         <Link
-          href="/dashboard/offers"
+          href="/admin/offers"
           className="text-[11px] uppercase tracking-[0.15em] text-zinc-500 hover:text-black dark:hover:text-white"
         >
-          ← Sell-to-us
+          ← Sell offers
         </Link>
 
         <header className="space-y-1">
@@ -69,16 +58,7 @@ export default async function OfferDetailPage({
             {offerLabel(OFFER_STATUSES, offer.status)}
           </p>
           <h1 className="text-3xl font-semibold tracking-tight">
-            {submitter ? (
-              <Link
-                href={`/dashboard/submitters/${submitter.id}`}
-                className="hover:underline"
-              >
-                {submitter.name}
-              </Link>
-            ) : (
-              "Walk-in"
-            )}
+            {customer?.email ?? "—"}
           </h1>
           <p className="text-sm text-zinc-500">
             Offer total{" "}
@@ -86,6 +66,9 @@ export default async function OfferDetailPage({
               {formatMoneyCents(offer.offer_total_cents)}
             </span>{" "}
             · {items.length} card{items.length === 1 ? "" : "s"}
+            {offer.payout_method
+              ? ` · payout: ${offerLabel(PAYOUT_METHODS, offer.payout_method)}`
+              : ""}
           </p>
         </header>
 
@@ -96,16 +79,7 @@ export default async function OfferDetailPage({
               className="flex items-center justify-between gap-4 border-b border-black/10 px-4 py-3 last:border-0 dark:border-white/15"
             >
               <div className="min-w-0">
-                {it.cardId ? (
-                  <Link
-                    href={`/dashboard/cards/${it.cardId}`}
-                    className="truncate text-sm hover:underline"
-                  >
-                    {it.title}
-                  </Link>
-                ) : (
-                  <span className="text-sm text-zinc-500">{it.title}</span>
-                )}
+                <p className="truncate text-sm">{it.title}</p>
                 {it.serial && (
                   <p className="font-mono text-[11px] text-zinc-500">{it.serial}</p>
                 )}
@@ -117,20 +91,19 @@ export default async function OfferDetailPage({
           ))}
         </section>
 
-        <OfferControls
-          offerId={offer.id}
-          status={offer.status}
-          payoutMethod={offer.payout_method}
-          payoutReference={offer.payout_reference}
-          notes={offer.notes}
-          payoutMethods={PAYOUT_METHODS.map((m) => ({ ...m }))}
-          statuses={OFFER_STATUSES.map((s) => ({ ...s }))}
-        />
+        {offer.notes && (
+          <p className="border-l-2 border-black/15 pl-3 text-sm text-zinc-600 dark:border-white/20 dark:text-zinc-400">
+            {offer.notes}
+          </p>
+        )}
 
-        <footer className="flex items-center justify-between pt-2 text-xs text-zinc-500">
-          <span>Created {new Date(offer.created_at).toLocaleString()}</span>
-          <DeleteOfferButton offerId={offer.id} />
-        </footer>
+        <section className="border border-black/10 p-6 dark:border-white/15">
+          <AdminOfferStatusControl
+            offerId={offer.id}
+            status={offer.status}
+            statuses={OFFER_STATUSES.map((s) => ({ ...s }))}
+          />
+        </section>
       </div>
     </main>
   );

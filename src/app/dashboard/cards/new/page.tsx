@@ -25,6 +25,7 @@ export default async function NewCardPage({
   const { data: submitters } = await supabase
     .from("submitters")
     .select("id, name")
+    .eq("owner_id", user.id)
     .order("name", { ascending: true });
 
   return (

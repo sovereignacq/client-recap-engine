@@ -19,6 +19,7 @@ export default async function EditSubmitterPage({
     .from("submitters")
     .select("id, name, email, phone, address, notes")
     .eq("id", id)
+    .eq("owner_id", user.id)
     .maybeSingle();
 
   if (!submitter) notFound();

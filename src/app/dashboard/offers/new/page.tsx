@@ -20,6 +20,7 @@ export default async function NewOfferPage({
   const { data: submitters } = await supabase
     .from("submitters")
     .select("id, name")
+    .eq("owner_id", user.id)
     .order("name", { ascending: true });
 
   // Cards still available to sell (not already sold), with the info we need to
@@ -29,6 +30,7 @@ export default async function NewOfferPage({
     .select(
       "id, submitter_id, fmv_cents, card_year, manufacturer, set_name, player_or_character, card_number, variant, status",
     )
+    .eq("owner_id", user.id)
     .neq("status", "sold")
     .order("created_at", { ascending: false });
 

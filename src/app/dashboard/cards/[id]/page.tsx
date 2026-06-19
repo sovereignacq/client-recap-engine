@@ -30,6 +30,7 @@ export default async function CardDetailPage({
     .from("cards")
     .select("*")
     .eq("id", id)
+    .eq("owner_id", user.id)
     .maybeSingle();
 
   if (!card) notFound();
@@ -37,6 +38,7 @@ export default async function CardDetailPage({
   const { data: submitters } = await supabase
     .from("submitters")
     .select("id, name")
+    .eq("owner_id", user.id)
     .order("name", { ascending: true });
 
   const submitter = card.submitter_id

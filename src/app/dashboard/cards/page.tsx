@@ -38,6 +38,7 @@ export default async function CardsListPage() {
     .select(
       "id, serial, status, id_status, fmv_cents, fmv_currency, card_year, manufacturer, set_name, player_or_character, card_number, variant, created_at, submitter:submitters(name)",
     )
+    .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
   const cards: CardRow[] = (data ?? []).map((c) => ({

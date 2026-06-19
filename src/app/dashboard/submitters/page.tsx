@@ -12,6 +12,7 @@ export default async function SubmittersListPage() {
   const { data: submitters } = await supabase
     .from("submitters")
     .select("id, name, email, phone, created_at")
+    .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
   return (

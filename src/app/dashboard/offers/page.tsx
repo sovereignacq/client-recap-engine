@@ -24,6 +24,7 @@ export default async function OffersListPage() {
     .select(
       "id, status, offer_total_cents, created_at, submitter:submitters(name)",
     )
+    .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
   const offers: OfferRow[] = (data ?? []).map((o) => ({
