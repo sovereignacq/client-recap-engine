@@ -35,6 +35,9 @@ export default async function AdminLayout({
             <Link href="/admin/offers" className="text-zinc-500 hover:text-black dark:hover:text-white">
               Sell offers
             </Link>
+            <Link href="/admin/economics" className="text-zinc-500 hover:text-black dark:hover:text-white">
+              Economics
+            </Link>
             <Link
               href="/dashboard"
               className="rounded-none border border-black/20 px-3 py-1.5 hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
