@@ -114,6 +114,30 @@ export async function topUpAction(amountCents: number): Promise<TopUpResult> {
   return { ok: true, balance: data as number };
 }
 
+export type DailyResult =
+  | { ok: true; rewardCents: number; streak: number; balance: number }
+  | { ok: false; error: string };
+
+/** Claim the once-per-day wallet bonus (scales with streak). */
+export async function claimDailyAction(): Promise<DailyResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const { data, error } = await supabase.rpc("claim_daily");
+  if (error) {
+    const msg = /already claimed/i.test(error.message)
+      ? "Already claimed today — come back tomorrow."
+      : error.message;
+    return { ok: false, error: msg };
+  }
+  const d = data as { reward_cents: number; streak: number; balance_after: number };
+  revalidatePath("/dashboard/buy");
+  return { ok: true, rewardCents: d.reward_cents, streak: d.streak, balance: d.balance_after };
+}
+
 export type SellBackResult =
   | { ok: true; payoutCents: number; balance: number }
   | { ok: false; error: string };

@@ -7,6 +7,7 @@ import {
   openPackAction,
   topUpAction,
   sellBackAction,
+  claimDailyAction,
   type OpenResult,
 } from "./actions";
 
@@ -51,17 +52,27 @@ export function BuyClient({
   poolAvailable,
   balance: initialBalance,
   pityByTier: initialPity,
+  dailyClaimable: initialDailyClaimable,
+  dailyStreak: initialStreak,
 }: {
   tiers: Tier[];
   modes: Mode[];
   poolAvailable: boolean;
   balance: number;
   pityByTier: Record<string, number>;
+  dailyClaimable: boolean;
+  dailyStreak: number;
 }) {
   const router = useRouter();
   const [isOpening, startOpen] = useTransition();
   const [isFunding, startFund] = useTransition();
   const [isSelling, startSell] = useTransition();
+  const [isClaiming, startClaim] = useTransition();
+  const [daily, setDaily] = useState({
+    claimable: initialDailyClaimable,
+    streak: initialStreak,
+  });
+  const [dailyMsg, setDailyMsg] = useState<string | null>(null);
   const [openingKey, setOpeningKey] = useState<string | null>(null);
   const [result, setResult] = useState<Won | null>(null);
   const [sold, setSold] = useState(false);
@@ -130,6 +141,22 @@ export function BuyClient({
     });
   };
 
+  const claimDaily = () => {
+    setDailyMsg(null);
+    startClaim(async () => {
+      const r = await claimDailyAction();
+      if (r.ok) {
+        setBalance(r.balance);
+        setDaily({ claimable: false, streak: r.streak });
+        setDailyMsg(
+          `+${formatMoneyCents(r.rewardCents)} · ${r.streak}-day streak`,
+        );
+      } else {
+        setDailyMsg(r.error);
+      }
+    });
+  };
+
   const sellBack = (won: Won) => {
     startSell(async () => {
       const r = await sellBackAction(won.cardId);
@@ -155,6 +182,16 @@ export function BuyClient({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={isClaiming || !daily.claimable}
+            onClick={claimDaily}
+            className="rounded-none bg-black px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            {daily.claimable
+              ? "Claim daily"
+              : `Daily claimed · ${daily.streak}🔥`}
+          </button>
           {TOPUP_PRESETS.map((c) => (
             <button
               key={c}
@@ -168,6 +205,11 @@ export function BuyClient({
           ))}
         </div>
       </div>
+      {dailyMsg && (
+        <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+          {dailyMsg}
+        </p>
+      )}
 
       {/* Odds level */}
       <div className="flex flex-wrap items-center gap-3">

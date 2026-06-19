@@ -56,10 +56,21 @@ export default async function BuyPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("balance_cents")
+    .select("balance_cents, last_daily_at, daily_streak")
     .eq("id", user.id)
     .maybeSingle();
   const balance = profile?.balance_cents ?? 0;
+
+  const now = new Date();
+  const startOfTodayUTC = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  const dailyClaimable =
+    !profile?.last_daily_at ||
+    new Date(profile.last_daily_at).getTime() < startOfTodayUTC;
+  const dailyStreak = profile?.daily_streak ?? 0;
 
   const { data: pityRows } = await supabase
     .from("pack_pity")
@@ -114,6 +125,8 @@ export default async function BuyPage() {
           poolAvailable={((poolCount as number) ?? 0) > 0}
           balance={balance}
           pityByTier={pityByTier}
+          dailyClaimable={dailyClaimable}
+          dailyStreak={dailyStreak}
         />
 
         {feed.length > 0 && (
