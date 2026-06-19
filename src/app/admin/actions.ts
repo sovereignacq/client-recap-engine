@@ -53,15 +53,48 @@ export async function adminUpdateOfferStatus(
       .eq("offer_id", offerId);
     const cardIds = (items ?? []).map((i) => i.card_id);
     if (cardIds.length) {
+      // Cards we buy become house inventory, eligible to be packed.
+      const { data: owner } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("role", "owner")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
       await supabase
         .from("cards")
-        .update({ status: "sold", updated_at: new Date().toISOString() })
+        .update({
+          status: "inventory",
+          in_inventory: true,
+          owner_id: owner?.id,
+          updated_at: new Date().toISOString(),
+        })
         .in("id", cardIds);
     }
   }
 
   revalidatePath(`/admin/offers/${offerId}`);
   revalidatePath("/admin/offers");
+  revalidatePath("/admin");
+}
+
+/** Add or remove a card from the house pack pool. */
+export async function adminToggleInventory(
+  cardId: string,
+  inInventory: boolean,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("cards")
+    .update({
+      in_inventory: inInventory,
+      status: inInventory ? "inventory" : "graded",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", cardId);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/inventory");
   revalidatePath("/admin");
 }
 

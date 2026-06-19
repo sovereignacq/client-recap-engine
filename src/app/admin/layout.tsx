@@ -29,6 +29,9 @@ export default async function AdminLayout({
             <Link href="/admin/cards" className="text-zinc-500 hover:text-black dark:hover:text-white">
               Submissions
             </Link>
+            <Link href="/admin/inventory" className="text-zinc-500 hover:text-black dark:hover:text-white">
+              Inventory
+            </Link>
             <Link href="/admin/offers" className="text-zinc-500 hover:text-black dark:hover:text-white">
               Sell offers
             </Link>

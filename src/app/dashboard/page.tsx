@@ -109,15 +109,26 @@ export default async function DashboardPage({
           </div>
         )}
 
-        <Link
-          href="/dashboard/cards/new"
-          className="flex items-center justify-between rounded-none bg-black px-6 py-5 text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-        >
-          <span className="text-sm font-medium uppercase tracking-[0.18em]">
-            Intake a card
-          </span>
-          <span aria-hidden className="text-lg">→</span>
-        </Link>
+        <div className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-2 dark:border-white/15 dark:bg-white/15">
+          <Link
+            href="/dashboard/cards/new"
+            className="flex items-center justify-between bg-black px-6 py-5 text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            <span className="text-sm font-medium uppercase tracking-[0.18em]">
+              Intake a card
+            </span>
+            <span aria-hidden className="text-lg">→</span>
+          </Link>
+          <Link
+            href="/dashboard/buy"
+            className="flex items-center justify-between bg-black px-6 py-5 text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            <span className="text-sm font-medium uppercase tracking-[0.18em]">
+              Buy a pack
+            </span>
+            <span aria-hidden className="text-lg">→</span>
+          </Link>
+        </div>
 
         <section className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-3 dark:border-white/15 dark:bg-white/15">
           <Link
