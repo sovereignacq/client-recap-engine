@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
 import {
@@ -70,6 +70,32 @@ export function BuyClient({
   const [balance, setBalance] = useState(initialBalance);
   const [pity, setPity] = useState<Record<string, number>>(initialPity);
 
+  // Reveal suspense + value count-up
+  const [phase, setPhase] = useState<"charging" | "revealed">("revealed");
+  const [displayCents, setDisplayCents] = useState(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!result) return;
+    const timer = setTimeout(() => {
+      setPhase("revealed");
+      const target = result.fmvCents;
+      const start = performance.now();
+      const dur = 750;
+      const tick = (now: number) => {
+        const p = Math.min(1, (now - start) / dur);
+        const eased = 1 - Math.pow(1 - p, 3);
+        setDisplayCents(Math.round(target * eased));
+        if (p < 1) rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    }, 1100);
+    return () => {
+      clearTimeout(timer);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [result]);
+
   const [modeKey, setModeKey] = useState(modes[0]?.key ?? "normal");
   const mode = useMemo(
     () => modes.find((m) => m.key === modeKey) ?? modes[0],
@@ -86,6 +112,8 @@ export function BuyClient({
         setBalance(r.balanceAfter);
         setPity((p) => ({ ...p, [tier.key]: r.pityCount }));
         setSold(false);
+        setPhase("charging");
+        setDisplayCents(0);
         setResult(r);
       } else {
         setError(r.error);
@@ -257,76 +285,87 @@ export function BuyClient({
           }}
         >
           <div
-            className="w-full max-w-sm border border-white/15 bg-black p-8 text-center text-white"
+            className="w-full max-w-sm overflow-hidden border border-white/15 bg-black p-8 text-center text-white"
             onClick={(e) => e.stopPropagation()}
           >
-            {result.guaranteed && (
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-300">
-                Guaranteed pull
-              </p>
-            )}
-            <p
-              className={`text-[11px] font-semibold uppercase tracking-[0.3em] ${
-                result.outcome === "above"
-                  ? "text-emerald-400"
-                  : result.outcome === "below"
-                    ? "text-red-400"
-                    : "text-zinc-300"
-              }`}
-            >
-              {OUTCOME_LABEL[result.outcome]}
-            </p>
-            <h3 className="mt-4 text-lg font-semibold">{result.title}</h3>
-            <p className="mt-1 font-mono text-xs text-zinc-400">{result.serial}</p>
-            {result.grade && <p className="mt-1 text-sm text-zinc-300">{result.grade}</p>}
-            <p className="mt-5 text-4xl font-semibold tabular-nums">
-              {formatMoneyCents(result.fmvCents)}
-            </p>
-            <p className="mt-1 text-xs uppercase tracking-[0.15em] text-zinc-400">
-              Paid {formatMoneyCents(result.priceCents)}
-            </p>
-            <p
-              className={`mt-3 text-sm font-medium ${
-                result.profitCents >= 0 ? "text-emerald-400" : "text-red-400"
-              }`}
-            >
-              {result.profitCents >= 0 ? "+" : "−"}
-              {formatMoneyCents(Math.abs(result.profitCents))}
-            </p>
-
-            {sold ? (
-              <p className="mt-6 text-sm text-emerald-400">
-                Sold back · wallet {formatMoneyCents(balance)}
-              </p>
+            {phase === "charging" ? (
+              <div className="flex flex-col items-center py-6">
+                <div className="h-28 w-20 animate-pulse rounded-sm bg-gradient-to-br from-zinc-700 via-zinc-500 to-zinc-800 shadow-[0_0_40px_rgba(255,255,255,0.25)]" />
+                <p className="mt-6 animate-pulse text-[11px] uppercase tracking-[0.4em] text-zinc-400">
+                  Opening…
+                </p>
+              </div>
             ) : (
-              <div className="mt-7 flex gap-3">
+              <div className="animate-[fadeIn_300ms_ease-out]">
+                {result.guaranteed && (
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-300">
+                    Guaranteed pull
+                  </p>
+                )}
+                <p
+                  className={`text-[11px] font-semibold uppercase tracking-[0.3em] ${
+                    result.outcome === "above"
+                      ? "text-emerald-400"
+                      : result.outcome === "below"
+                        ? "text-red-400"
+                        : "text-zinc-300"
+                  }`}
+                >
+                  {OUTCOME_LABEL[result.outcome]}
+                </p>
+                <h3 className="mt-4 text-lg font-semibold">{result.title}</h3>
+                <p className="mt-1 font-mono text-xs text-zinc-400">{result.serial}</p>
+                {result.grade && <p className="mt-1 text-sm text-zinc-300">{result.grade}</p>}
+                <p className="mt-5 text-4xl font-semibold tabular-nums">
+                  {formatMoneyCents(displayCents)}
+                </p>
+                <p className="mt-1 text-xs uppercase tracking-[0.15em] text-zinc-400">
+                  Paid {formatMoneyCents(result.priceCents)}
+                </p>
+                <p
+                  className={`mt-3 text-sm font-medium ${
+                    result.profitCents >= 0 ? "text-emerald-400" : "text-red-400"
+                  }`}
+                >
+                  {result.profitCents >= 0 ? "+" : "−"}
+                  {formatMoneyCents(Math.abs(result.profitCents))}
+                </p>
+
+                {sold ? (
+                  <p className="mt-6 text-sm text-emerald-400">
+                    Sold back · wallet {formatMoneyCents(balance)}
+                  </p>
+                ) : (
+                  <div className="mt-7 flex gap-3">
+                    <button
+                      type="button"
+                      disabled={isSelling}
+                      onClick={() => sellBack(result)}
+                      className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10 disabled:opacity-40"
+                    >
+                      {isSelling ? "…" : `Sell back +${formatMoneyCents(result.buybackCents)}`}
+                    </button>
+                    <a
+                      href={`/dashboard/cards/${result.cardId}`}
+                      className="flex-1 rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200"
+                    >
+                      Keep
+                    </a>
+                  </div>
+                )}
+
                 <button
                   type="button"
-                  disabled={isSelling}
-                  onClick={() => sellBack(result)}
-                  className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10 disabled:opacity-40"
+                  onClick={() => {
+                    setResult(null);
+                    router.refresh();
+                  }}
+                  className="mt-3 text-[11px] uppercase tracking-[0.15em] text-zinc-400 hover:text-white"
                 >
-                  {isSelling ? "…" : `Sell back +${formatMoneyCents(result.buybackCents)}`}
+                  Close
                 </button>
-                <a
-                  href={`/dashboard/cards/${result.cardId}`}
-                  className="flex-1 rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200"
-                >
-                  Keep
-                </a>
               </div>
             )}
-
-            <button
-              type="button"
-              onClick={() => {
-                setResult(null);
-                router.refresh();
-              }}
-              className="mt-3 text-[11px] uppercase tracking-[0.15em] text-zinc-400 hover:text-white"
-            >
-              Close
-            </button>
           </div>
         </div>
       )}

@@ -80,6 +80,17 @@ export default async function BuyPage() {
   const history = (openings ?? []) as OpeningRow[];
   const net = history.reduce((sum, o) => sum + (o.profit_cents ?? 0), 0);
 
+  const { data: feedRows } = await supabase.rpc("recent_pulls", { p_limit: 15 });
+  const tierName = new Map(tiers.map((t) => [t.key, t.name]));
+  const feed = (feedRows ?? []) as {
+    tier_key: string;
+    fmv_cents: number | null;
+    price_cents: number;
+    outcome: string | null;
+    created_at: string;
+    handle: string;
+  }[];
+
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-12">
       <div className="w-full max-w-4xl space-y-10">
@@ -104,6 +115,41 @@ export default async function BuyPage() {
           balance={balance}
           pityByTier={pityByTier}
         />
+
+        {feed.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+              Live pulls
+            </h2>
+            <ul className="divide-y divide-black/10 border border-black/10 dark:divide-white/15 dark:border-white/15">
+              {feed.map((f, i) => {
+                const win = f.outcome === "above";
+                return (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm"
+                  >
+                    <span className="min-w-0 truncate">
+                      <span className="font-medium">{f.handle}</span>
+                      <span className="text-zinc-500">
+                        {" "}
+                        pulled {tierName.get(f.tier_key) ?? f.tier_key}
+                      </span>
+                    </span>
+                    <span
+                      className={`shrink-0 tabular-nums ${
+                        win ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-zinc-500"
+                      }`}
+                    >
+                      {formatMoneyCents(f.fmv_cents)}
+                      {win ? " ↑" : ""}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
         <section className="space-y-3">
           <div className="flex items-center justify-between">
