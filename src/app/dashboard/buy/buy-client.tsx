@@ -31,6 +31,12 @@ const OUTCOME_LABEL: Record<string, string> = {
   above: "Above",
 };
 
+const MODE_DESC: Record<string, string> = {
+  normal: "Balanced odds.",
+  high: "Polarized — more downside, bigger upside.",
+  max: "All or nothing — only Below or Jackpot.",
+};
+
 export function BuyClient({
   tiers,
   modes,
@@ -89,9 +95,9 @@ export function BuyClient({
             );
           })}
         </div>
-        {mode && mode.priceMult !== 1 && (
+        {mode && (
           <span className="text-[11px] text-zinc-500">
-            {mode.priceMult}× price · better odds
+            {MODE_DESC[mode.key] ?? ""}
           </span>
         )}
       </div>
@@ -134,14 +140,16 @@ export function BuyClient({
                 Pull {formatMoneyCents(minCents)} – {formatMoneyCents(maxCents)}
               </p>
               <ul className="mt-4 space-y-1 text-xs text-zinc-500">
-                {adj.map((b) => (
-                  <li key={b.key} className="flex justify-between gap-2">
-                    <span>{b.label}</span>
-                    <span className="tabular-nums">
-                      {Math.round((b.w / total) * 100)}%
-                    </span>
-                  </li>
-                ))}
+                {adj
+                  .filter((b) => b.w > 0)
+                  .map((b) => (
+                    <li key={b.key} className="flex justify-between gap-2">
+                      <span>{b.label}</span>
+                      <span className="tabular-nums">
+                        {Math.round((b.w / total) * 100)}%
+                      </span>
+                    </li>
+                  ))}
               </ul>
               <button
                 type="button"
