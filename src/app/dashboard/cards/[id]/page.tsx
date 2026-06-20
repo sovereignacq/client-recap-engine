@@ -31,6 +31,7 @@ export default async function CardDetailPage({
     .select("*")
     .eq("id", id)
     .eq("owner_id", user.id)
+    .is("archived_at", null)
     .maybeSingle();
 
   if (!card) notFound();

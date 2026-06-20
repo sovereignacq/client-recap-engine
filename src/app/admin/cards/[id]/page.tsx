@@ -11,6 +11,7 @@ import {
 } from "@/lib/cards";
 import { GradeReportView, type GradeReportData } from "@/app/dashboard/cards/grade-report";
 import { AdminCardStatusControl } from "./status-control";
+import { AdminArchiveControl } from "./archive-control";
 
 export default async function AdminCardDetailPage({
   params,
@@ -54,6 +55,12 @@ export default async function AdminCardDetailPage({
         >
           ← Submissions
         </Link>
+
+        {card.archived_at && (
+          <p className="border-l-2 border-amber-500 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            Archived {new Date(card.archived_at).toLocaleString()}
+          </p>
+        )}
 
         <header className="space-y-1">
           <p className="font-mono text-sm text-zinc-500">{card.serial}</p>
@@ -113,6 +120,10 @@ export default async function AdminCardDetailPage({
             <GradeReportView report={card.grade_report as GradeReportData} />
           </section>
         )}
+
+        <footer className="flex justify-end pt-2">
+          <AdminArchiveControl cardId={card.id} archived={!!card.archived_at} />
+        </footer>
       </div>
     </main>
   );

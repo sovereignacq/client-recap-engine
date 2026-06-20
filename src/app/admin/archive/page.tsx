@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { cardTitle, formatMoneyCents, labelFor, CARD_STATUSES } from "@/lib/cards";
+import { cardTitle, labelFor, CARD_STATUSES } from "@/lib/cards";
 
-export default async function AdminCardsPage() {
+export default async function AdminArchivePage() {
   const supabase = await createClient();
 
   const { data: cards } = await supabase
     .from("cards")
     .select(
-      "id, serial, status, auto_grade_label, fmv_cents, fmv_currency, owner_id, card_year, manufacturer, set_name, player_or_character, card_number, variant, created_at",
+      "id, serial, status, owner_id, archived_at, card_year, manufacturer, set_name, player_or_character, card_number, variant",
     )
-    .is("archived_at", null)
-    .order("created_at", { ascending: false });
+    .not("archived_at", "is", null)
+    .order("archived_at", { ascending: false });
 
   const ownerIds = [...new Set((cards ?? []).map((c) => c.owner_id))];
   const emailById = new Map<string, string>();
@@ -27,8 +27,11 @@ export default async function AdminCardsPage() {
     <main className="flex flex-1 flex-col items-center px-4 py-12">
       <div className="w-full max-w-5xl space-y-8">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Submissions</h1>
-          <p className="mt-1 text-sm text-zinc-500">Every card across all customers.</p>
+          <h1 className="text-3xl font-semibold tracking-tight">Archive</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Deleted cards — kept here for records. Customers no longer see them.
+            Open one to restore it.
+          </p>
         </div>
 
         {cards && cards.length > 0 ? (
@@ -48,9 +51,8 @@ export default async function AdminCardsPage() {
                       {emailById.get(c.owner_id) ? ` · ${emailById.get(c.owner_id)}` : ""}
                     </p>
                   </div>
-                  <span className="shrink-0 text-sm tabular-nums text-zinc-600 dark:text-zinc-400">
-                    {c.auto_grade_label || "—"}
-                    {c.fmv_cents !== null ? ` · ${formatMoneyCents(c.fmv_cents, c.fmv_currency)}` : ""}
+                  <span className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-zinc-400">
+                    {c.archived_at ? new Date(c.archived_at).toLocaleDateString() : ""}
                   </span>
                 </Link>
               </li>
@@ -58,7 +60,7 @@ export default async function AdminCardsPage() {
           </ul>
         ) : (
           <p className="border border-dashed border-black/20 p-12 text-center text-sm text-zinc-500 dark:border-white/20">
-            No submissions yet.
+            Nothing archived.
           </p>
         )}
       </div>

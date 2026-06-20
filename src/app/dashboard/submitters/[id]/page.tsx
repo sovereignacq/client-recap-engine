@@ -37,6 +37,7 @@ export default async function SubmitterDetailPage({
     )
     .eq("submitter_id", id)
     .eq("owner_id", user.id)
+    .is("archived_at", null)
     .order("created_at", { ascending: false });
 
   return (

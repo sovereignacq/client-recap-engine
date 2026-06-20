@@ -78,6 +78,45 @@ export async function adminUpdateOfferStatus(
   revalidatePath("/admin");
 }
 
+/** Staff archive a card (soft-delete). Removed from active lists + the pool. */
+export async function adminArchiveCard(
+  cardId: string,
+): Promise<{ error?: string } | void> {
+  const role = await getRole();
+  if (!isStaff(role)) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from("cards")
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: user?.id,
+      in_inventory: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", cardId);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/cards");
+  revalidatePath("/admin/archive");
+  revalidatePath("/admin");
+}
+
+export async function adminRestoreCard(
+  cardId: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("cards")
+    .update({ archived_at: null, archived_by: null, updated_at: new Date().toISOString() })
+    .eq("id", cardId);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/archive");
+  revalidatePath("/admin/cards");
+}
+
 /** Add or remove a card from the house pack pool. */
 export async function adminToggleInventory(
   cardId: string,

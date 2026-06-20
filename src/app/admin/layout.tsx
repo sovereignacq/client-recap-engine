@@ -26,6 +26,9 @@ export default async function AdminLayout({
             <Link href="/admin" className="text-zinc-500 hover:text-black dark:hover:text-white">
               Overview
             </Link>
+            <Link href="/admin/users" className="text-zinc-500 hover:text-black dark:hover:text-white">
+              Users
+            </Link>
             <Link href="/admin/cards" className="text-zinc-500 hover:text-black dark:hover:text-white">
               Submissions
             </Link>
@@ -37,6 +40,9 @@ export default async function AdminLayout({
             </Link>
             <Link href="/admin/economics" className="text-zinc-500 hover:text-black dark:hover:text-white">
               Economics
+            </Link>
+            <Link href="/admin/archive" className="text-zinc-500 hover:text-black dark:hover:text-white">
+              Archive
             </Link>
             <Link
               href="/dashboard"

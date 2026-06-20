@@ -498,21 +498,13 @@ export async function deleteCardAction(cardId: string): Promise<void> {
   } = await supabase.auth.getUser();
   if (!user) return;
 
-  const { data: card } = await supabase
+  // Soft-delete: archive it. The customer no longer sees it anywhere, but it's
+  // retained in the back office for records.
+  await supabase
     .from("cards")
-    .select("image_path, image_back_path")
+    .update({ archived_at: new Date().toISOString(), archived_by: user.id })
     .eq("id", cardId)
-    .eq("owner_id", user.id)
-    .maybeSingle();
-
-  await supabase.from("cards").delete().eq("id", cardId).eq("owner_id", user.id);
-
-  const paths = [card?.image_path, card?.image_back_path].filter(
-    (p): p is string => Boolean(p),
-  );
-  if (paths.length) {
-    await supabase.storage.from(BUCKET).remove(paths);
-  }
+    .eq("owner_id", user.id);
 
   revalidatePath("/dashboard/cards");
   revalidatePath("/dashboard");

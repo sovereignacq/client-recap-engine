@@ -49,7 +49,8 @@ export default async function DashboardPage({
   const { count: cardsCount } = await supabase
     .from("cards")
     .select("id", { count: "exact", head: true })
-    .eq("owner_id", user.id);
+    .eq("owner_id", user.id)
+    .is("archived_at", null);
 
   const { count: submittersCount } = await supabase
     .from("submitters")

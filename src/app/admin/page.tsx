@@ -7,7 +7,10 @@ export default async function AdminOverviewPage() {
 
   const [{ count: cardsCount }, { count: customersCount }, { count: offersCount }] =
     await Promise.all([
-      supabase.from("cards").select("id", { count: "exact", head: true }),
+      supabase
+        .from("cards")
+        .select("id", { count: "exact", head: true })
+        .is("archived_at", null),
       supabase
         .from("profiles")
         .select("id", { count: "exact", head: true })
@@ -25,6 +28,7 @@ export default async function AdminOverviewPage() {
     .select(
       "id, serial, status, auto_grade_label, fmv_cents, fmv_currency, owner_id, card_year, manufacturer, set_name, player_or_character, card_number, variant, created_at",
     )
+    .is("archived_at", null)
     .order("created_at", { ascending: false })
     .limit(8);
 

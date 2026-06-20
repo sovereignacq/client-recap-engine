@@ -32,6 +32,7 @@ export default async function NewOfferPage({
     )
     .eq("owner_id", user.id)
     .neq("status", "sold")
+    .is("archived_at", null)
     .order("created_at", { ascending: false });
 
   const cards = (cardRows ?? []).map((c) => ({
