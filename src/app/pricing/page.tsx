@@ -32,7 +32,7 @@ const TIERS: Tier[] = [
       "Photo identification",
       "Serialized card records & status tracking",
       "Submitter log",
-      "Buy, sell-to-us & (soon) auction",
+      "Buy & sell-to-us",
       "Grading submissions at standard service fee",
     ],
   },

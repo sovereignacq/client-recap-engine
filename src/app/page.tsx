@@ -25,7 +25,7 @@ export default async function Home() {
       <section className="border-b border-black/10 dark:border-white/15">
         <div className="mx-auto grid w-full max-w-6xl gap-14 px-4 py-24 sm:px-6 sm:py-32 lg:grid-cols-2 lg:items-center lg:gap-20">
           <div>
-            <p className={EYEBROW}>Grade · Submit · Buy · Sell · Auction</p>
+            <p className={EYEBROW}>Grade · Submit · Buy · Sell</p>
             <h1 className="mt-6 text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
               Everything
               <br />
@@ -35,9 +35,8 @@ export default async function Home() {
             </h1>
             <p className="mt-8 max-w-md text-base leading-7 text-zinc-600 dark:text-zinc-400">
               Grade and identify your cards, submit them to PSA, TAG, and the
-              other majors without leaving home, then buy, sell, and auction —
-              all in one place. One account, from the first photo to the final
-              sale.
+              other majors without leaving home, then buy and sell — all in one
+              place. One account, from the first photo to the final sale.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
               <Link href={signedIn ? "/dashboard" : "/signup"} className={BTN_SOLID}>
@@ -111,11 +110,11 @@ export default async function Home() {
           <div className="max-w-2xl">
             <p className={EYEBROW}>One platform</p>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Five things you used to need five sites for.
+              Everything your cards need, in one place.
             </h2>
             <p className="mt-4 max-w-xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-              Stop juggling a grader, a marketplace, an auction house, and a
-              spreadsheet. APEX TCG does the whole loop.
+              Stop juggling a grader, a marketplace, and a spreadsheet. APEX TCG
+              does the whole loop.
             </p>
           </div>
 
@@ -143,12 +142,6 @@ export default async function Home() {
             />
             <Capability
               n="05"
-              title="Auction"
-              soon
-              body="List your best cards to the highest bidder, or bid on cards other collectors put up. Settled and tracked inside the same account."
-            />
-            <Capability
-              n="06"
               title="Track everything"
               body="Every card gets a serial and a status — received, grading, graded, listed, sold, or returned — with grade and confirmed value on file."
             />
@@ -226,7 +219,7 @@ export default async function Home() {
               cadence="forever"
               points={[
                 "Photo ID & serialized records",
-                "Buy, sell & (soon) auction",
+                "Buy & sell on one platform",
                 "Submit at standard service fee",
               ]}
             />
@@ -279,12 +272,12 @@ export default async function Home() {
             <Step
               n="02"
               title="Submit or list"
-              body="Send it to a grading company at cost plus a flat service fee, or list it to buy, sell, or auction — all from the same record."
+              body="Send it to a grading company at cost plus a flat service fee, or list it to buy or sell — all from the same record."
             />
             <Step
               n="03"
               title="Track to payout"
-              body="Follow the card through grading, sale, or auction, with the grade and confirmed fair market value on file the whole way."
+              body="Follow the card through grading and sale, with the grade and confirmed fair market value on file the whole way."
             />
           </ol>
         </div>
@@ -297,8 +290,8 @@ export default async function Home() {
             One home for the whole hobby.
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-base text-zinc-600 dark:text-zinc-400">
-            Grade it, submit it, buy it, sell it, auction it — and keep a clean
-            record of every card from the first photo to the final payout.
+            Grade it, submit it, buy it, sell it — and keep a clean record of
+            every card from the first photo to the final payout.
           </p>
           <Link
             href={signedIn ? "/dashboard" : "/signup"}
