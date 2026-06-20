@@ -81,7 +81,7 @@ export default async function BuyPage() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "balance_cents, withdrawable_cents, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents, referral_code, checkin_streak, checkin_total, last_checkin_on, last_spin_on",
+      "balance_cents, withdrawable_cents, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents, referral_code, checkin_streak, checkin_total, last_checkin_at, last_spin_at",
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -95,9 +95,15 @@ export default async function BuyPage() {
       ? profile.play_paused_until
       : null;
 
-  const todayUTC = new Date().toISOString().slice(0, 10);
-  const checkinClaimable = profile?.last_checkin_on !== todayUTC;
-  const spinClaimable = profile?.last_spin_on !== todayUTC;
+  // Rewards reset on a rolling 24h cooldown (closes the midnight double-claim).
+  const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+  const nowMs = Date.now();
+  const checkinClaimable =
+    !profile?.last_checkin_at ||
+    nowMs - new Date(profile.last_checkin_at).getTime() >= COOLDOWN_MS;
+  const spinClaimable =
+    !profile?.last_spin_at ||
+    nowMs - new Date(profile.last_spin_at).getTime() >= COOLDOWN_MS;
 
   // Referral identity + share link, plus how many referrals have paid off.
   const referralCode = profile?.referral_code ?? "";

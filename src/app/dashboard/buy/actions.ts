@@ -480,7 +480,7 @@ export async function dailyCheckinAction(): Promise<CheckinResult> {
   const { data, error } = await supabase.rpc("daily_checkin");
   if (error) {
     const msg = /already checked in/i.test(error.message)
-      ? "Already checked in today — come back tomorrow."
+      ? "Already checked in — come back in 24 hours."
       : /verify your email/i.test(error.message)
         ? "Verify your email to start earning rewards."
         : error.message;
@@ -529,7 +529,7 @@ export async function dailySpinAction(): Promise<SpinResult> {
   const { data, error } = await supabase.rpc("daily_spin");
   if (error) {
     const msg = /already spun/i.test(error.message)
-      ? "You already spun today — come back tomorrow."
+      ? "You already spun — come back in 24 hours."
       : /verify your email/i.test(error.message)
         ? "Verify your email to spin."
         : error.message;
