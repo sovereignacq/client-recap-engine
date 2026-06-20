@@ -3,12 +3,15 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { cardTitle, formatMoneyCents } from "@/lib/cards";
 import { getRole, isStaff } from "@/lib/roles";
+import { siteUrl } from "@/lib/site-url";
 import {
   BuyClient,
   type Tier,
   type Mode,
   type Category,
   type OwnedCard,
+  type PackCredit,
+  type SpinPrize,
 } from "./buy-client";
 
 export const maxDuration = 30;
@@ -78,28 +81,68 @@ export default async function BuyPage() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "balance_cents, last_daily_at, daily_streak, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents",
+      "balance_cents, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents, referral_code, checkin_streak, checkin_total, last_checkin_on, last_spin_on",
     )
     .eq("id", user.id)
     .maybeSingle();
   const balance = profile?.balance_cents ?? 0;
   const ageConfirmed = !!profile?.age_confirmed_at;
+  const emailVerified = !!user.email_confirmed_at;
   const pausedUntil =
     profile?.play_paused_until &&
     new Date(profile.play_paused_until) > new Date()
       ? profile.play_paused_until
       : null;
 
-  const now = new Date();
-  const startOfTodayUTC = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-  );
-  const dailyClaimable =
-    !profile?.last_daily_at ||
-    new Date(profile.last_daily_at).getTime() < startOfTodayUTC;
-  const dailyStreak = profile?.daily_streak ?? 0;
+  const todayUTC = new Date().toISOString().slice(0, 10);
+  const checkinClaimable = profile?.last_checkin_on !== todayUTC;
+  const spinClaimable = profile?.last_spin_on !== todayUTC;
+
+  // Referral identity + share link, plus how many referrals have paid off.
+  const referralCode = profile?.referral_code ?? "";
+  const referralUrl = referralCode
+    ? `${siteUrl()}/signup?ref=${referralCode}`
+    : "";
+  const [{ count: refQualified }, { count: refPending }] = await Promise.all([
+    supabase
+      .from("referrals")
+      .select("id", { count: "exact", head: true })
+      .eq("referrer_id", user.id)
+      .eq("status", "qualified"),
+    supabase
+      .from("referrals")
+      .select("id", { count: "exact", head: true })
+      .eq("referrer_id", user.id)
+      .eq("status", "pending"),
+  ]);
+
+  // Unredeemed free-pack credits.
+  const { data: creditRows } = await supabase
+    .from("pack_credits")
+    .select("id, tier_key, mystery, source, created_at")
+    .eq("user_id", user.id)
+    .is("consumed_at", null)
+    .order("created_at", { ascending: true });
+  const credits: PackCredit[] = (creditRows ?? []).map((c) => ({
+    id: c.id,
+    tierKey: c.tier_key,
+    mystery: c.mystery,
+    source: c.source,
+  }));
+
+  // Daily-spin prize faces (for the wheel display).
+  const { data: prizeRows } = await supabase
+    .from("spin_prizes")
+    .select("key, label, kind, amount_cents, tier_key, sort_order")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+  const spinPrizes: SpinPrize[] = (prizeRows ?? []).map((p) => ({
+    key: p.key,
+    label: p.label,
+    kind: p.kind as SpinPrize["kind"],
+    amountCents: p.amount_cents,
+    tierKey: p.tier_key,
+  }));
 
   const { data: pityRows } = await supabase
     .from("pack_pity")
@@ -182,8 +225,19 @@ export default async function BuyPage() {
           ownedCards={ownedCards}
           balance={balance}
           pityByTier={pityByTier}
-          dailyClaimable={dailyClaimable}
-          dailyStreak={dailyStreak}
+          credits={credits}
+          spinPrizes={spinPrizes}
+          checkin={{
+            claimable: checkinClaimable,
+            streak: profile?.checkin_streak ?? 0,
+            total: profile?.checkin_total ?? 0,
+          }}
+          spinClaimable={spinClaimable}
+          emailVerified={emailVerified}
+          referralCode={referralCode}
+          referralUrl={referralUrl}
+          referralQualified={refQualified ?? 0}
+          referralPending={refPending ?? 0}
           staff={isStaff(await getRole())}
           ageConfirmed={ageConfirmed}
           pausedUntil={pausedUntil}

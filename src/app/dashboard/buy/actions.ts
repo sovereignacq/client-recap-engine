@@ -348,3 +348,170 @@ export async function sellBackAction(cardId: string): Promise<SellBackResult> {
   revalidatePath("/dashboard");
   return { ok: true, payoutCents: d.payout_cents, balance: d.balance_after };
 }
+
+export type RedeemResult =
+  | {
+      ok: true;
+      cardId: string;
+      serial: string;
+      title: string;
+      grade: string | null;
+      fmvCents: number;
+      tierKey: string;
+      outcome: "below" | "even" | "above";
+      buybackCents: number;
+    }
+  | { ok: false; error: string };
+
+/** Open a free-pack credit (no wallet charge); draws a real card from the pool. */
+export async function redeemPackCreditAction(
+  creditId: string,
+): Promise<RedeemResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const { data, error } = await supabase.rpc("redeem_pack_credit", {
+    p_credit_id: creditId,
+  });
+  if (error) {
+    const msg = /verify your email/i.test(error.message)
+      ? "Verify your email first to open free packs."
+      : /no inventory/i.test(error.message)
+        ? "No cards available to pull right now — check back soon."
+        : error.message;
+    return { ok: false, error: msg };
+  }
+
+  const d = data as {
+    card_id: string;
+    serial: string;
+    fmv_cents: number;
+    tier_key: string;
+    outcome: "below" | "even" | "above";
+  };
+
+  const { data: card } = await supabase
+    .from("cards")
+    .select(
+      "card_year, manufacturer, set_name, player_or_character, card_number, variant, auto_grade_label",
+    )
+    .eq("id", d.card_id)
+    .maybeSingle();
+
+  revalidatePath("/dashboard/buy");
+  revalidatePath("/dashboard/cards");
+  revalidatePath("/dashboard");
+
+  return {
+    ok: true,
+    cardId: d.card_id,
+    serial: d.serial,
+    title: card ? cardTitle(card) : "Card",
+    grade: card?.auto_grade_label ?? null,
+    fmvCents: d.fmv_cents,
+    tierKey: d.tier_key,
+    outcome: d.outcome,
+    buybackCents: Math.round(d.fmv_cents * BUYBACK_PCT),
+  };
+}
+
+export type CheckinResult =
+  | {
+      ok: true;
+      streak: number;
+      total: number;
+      granted: "none" | "week" | "month";
+      tier: string | null;
+      weekDays: number;
+      monthDays: number;
+    }
+  | { ok: false; error: string };
+
+/** Daily login check-in: builds a streak, drops free packs at milestones. */
+export async function dailyCheckinAction(): Promise<CheckinResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const { data, error } = await supabase.rpc("daily_checkin");
+  if (error) {
+    const msg = /already checked in/i.test(error.message)
+      ? "Already checked in today — come back tomorrow."
+      : /verify your email/i.test(error.message)
+        ? "Verify your email to start earning rewards."
+        : error.message;
+    return { ok: false, error: msg };
+  }
+  const d = data as {
+    streak: number;
+    total: number;
+    granted: "none" | "week" | "month";
+    tier: string | null;
+    week_days: number;
+    month_days: number;
+  };
+  revalidatePath("/dashboard/buy");
+  return {
+    ok: true,
+    streak: d.streak,
+    total: d.total,
+    granted: d.granted,
+    tier: d.tier,
+    weekDays: d.week_days,
+    monthDays: d.month_days,
+  };
+}
+
+export type SpinResult =
+  | {
+      ok: true;
+      prizeKey: string;
+      label: string;
+      kind: "cash" | "pack" | "none";
+      amountCents: number;
+      tierKey: string | null;
+      balance: number;
+    }
+  | { ok: false; error: string };
+
+/** Daily spin: one weighted prize per day (cash or a free pack). */
+export async function dailySpinAction(): Promise<SpinResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const { data, error } = await supabase.rpc("daily_spin");
+  if (error) {
+    const msg = /already spun/i.test(error.message)
+      ? "You already spun today — come back tomorrow."
+      : /verify your email/i.test(error.message)
+        ? "Verify your email to spin."
+        : error.message;
+    return { ok: false, error: msg };
+  }
+  const d = data as {
+    prize_key: string;
+    label: string;
+    kind: "cash" | "pack" | "none";
+    amount_cents: number;
+    tier_key: string | null;
+    balance_after: number;
+  };
+  revalidatePath("/dashboard/buy");
+  return {
+    ok: true,
+    prizeKey: d.prize_key,
+    label: d.label,
+    kind: d.kind,
+    amountCents: d.amount_cents,
+    tierKey: d.tier_key,
+    balance: d.balance_after,
+  };
+}

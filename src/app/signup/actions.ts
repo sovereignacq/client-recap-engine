@@ -15,13 +15,19 @@ export async function signup(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("full_name") ?? "");
+  const referralCode = String(formData.get("referral_code") ?? "")
+    .trim()
+    .toUpperCase();
 
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: `${origin}/auth/callback`,
-      data: { full_name: fullName },
+      data: {
+        full_name: fullName,
+        ...(referralCode ? { referral_code: referralCode } : {}),
+      },
     },
   });
 
