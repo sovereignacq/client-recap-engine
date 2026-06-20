@@ -6,7 +6,7 @@ import { signup } from "./actions";
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; message?: string }>;
+  searchParams: Promise<{ error?: string; message?: string; ref?: string }>;
 }) {
   const supabase = await createClient();
   const {
@@ -71,6 +71,22 @@ export default async function SignupPage({
               minLength={8}
               autoComplete="new-password"
               className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="referral_code" className="text-sm font-medium">
+              Referral code{" "}
+              <span className="font-normal text-zinc-500">(optional)</span>
+            </label>
+            <input
+              id="referral_code"
+              name="referral_code"
+              type="text"
+              defaultValue={params.ref ?? ""}
+              autoCapitalize="characters"
+              placeholder="Got a friend's code? Get a free pack."
+              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm uppercase placeholder:normal-case placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900"
             />
           </div>
 

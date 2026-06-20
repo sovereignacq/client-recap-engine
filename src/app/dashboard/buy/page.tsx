@@ -1,9 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { formatMoneyCents } from "@/lib/cards";
+import { cardTitle, formatMoneyCents } from "@/lib/cards";
 import { getRole, isStaff } from "@/lib/roles";
-import { BuyClient, type Tier, type Mode, type Category } from "./buy-client";
+import { siteUrl } from "@/lib/site-url";
+import {
+  BuyClient,
+  type Tier,
+  type Mode,
+  type Category,
+  type OwnedCard,
+  type PackCredit,
+  type SpinPrize,
+} from "./buy-client";
 
 export const maxDuration = 30;
 
@@ -72,28 +81,75 @@ export default async function BuyPage() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "balance_cents, last_daily_at, daily_streak, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents",
+      "balance_cents, withdrawable_cents, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents, referral_code, checkin_streak, checkin_total, last_checkin_at, last_spin_at",
     )
     .eq("id", user.id)
     .maybeSingle();
   const balance = profile?.balance_cents ?? 0;
+  const withdrawable = profile?.withdrawable_cents ?? 0;
   const ageConfirmed = !!profile?.age_confirmed_at;
+  const emailVerified = !!user.email_confirmed_at;
   const pausedUntil =
     profile?.play_paused_until &&
     new Date(profile.play_paused_until) > new Date()
       ? profile.play_paused_until
       : null;
 
-  const now = new Date();
-  const startOfTodayUTC = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-  );
-  const dailyClaimable =
-    !profile?.last_daily_at ||
-    new Date(profile.last_daily_at).getTime() < startOfTodayUTC;
-  const dailyStreak = profile?.daily_streak ?? 0;
+  // Rewards reset on a rolling 24h cooldown (closes the midnight double-claim).
+  const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+  const nowMs = new Date().getTime();
+  const checkinClaimable =
+    !profile?.last_checkin_at ||
+    nowMs - new Date(profile.last_checkin_at).getTime() >= COOLDOWN_MS;
+  const spinClaimable =
+    !profile?.last_spin_at ||
+    nowMs - new Date(profile.last_spin_at).getTime() >= COOLDOWN_MS;
+
+  // Referral identity + share link, plus how many referrals have paid off.
+  const referralCode = profile?.referral_code ?? "";
+  const referralUrl = referralCode
+    ? `${siteUrl()}/signup?ref=${referralCode}`
+    : "";
+  const [{ count: refQualified }, { count: refPending }] = await Promise.all([
+    supabase
+      .from("referrals")
+      .select("id", { count: "exact", head: true })
+      .eq("referrer_id", user.id)
+      .eq("status", "qualified"),
+    supabase
+      .from("referrals")
+      .select("id", { count: "exact", head: true })
+      .eq("referrer_id", user.id)
+      .eq("status", "pending"),
+  ]);
+
+  // Unredeemed free-pack credits.
+  const { data: creditRows } = await supabase
+    .from("pack_credits")
+    .select("id, tier_key, mystery, source, created_at")
+    .eq("user_id", user.id)
+    .is("consumed_at", null)
+    .order("created_at", { ascending: true });
+  const credits: PackCredit[] = (creditRows ?? []).map((c) => ({
+    id: c.id,
+    tierKey: c.tier_key,
+    mystery: c.mystery,
+    source: c.source,
+  }));
+
+  // Daily-spin prize faces (for the wheel display).
+  const { data: prizeRows } = await supabase
+    .from("spin_prizes")
+    .select("key, label, kind, amount_cents, tier_key, sort_order")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+  const spinPrizes: SpinPrize[] = (prizeRows ?? []).map((p) => ({
+    key: p.key,
+    label: p.label,
+    kind: p.kind as SpinPrize["kind"],
+    amountCents: p.amount_cents,
+    tierKey: p.tier_key,
+  }));
 
   const { data: pityRows } = await supabase
     .from("pack_pity")
@@ -103,6 +159,29 @@ export default async function BuyPage() {
   (pityRows ?? []).forEach((p) => {
     pityByTier[`${p.category_key}:${p.tier_key}`] = p.count;
   });
+
+  // Cards the player won and still holds — eligible to consolidate via trade-up.
+  const { data: ownedRows } = await supabase
+    .from("cards")
+    .select(
+      "id, serial, fmv_cents, auto_grade_label, card_year, manufacturer, set_name, player_or_character, card_number, variant",
+    )
+    .eq("owner_id", user.id)
+    .eq("status", "won")
+    .eq("in_inventory", false)
+    .is("archived_at", null)
+    .not("fmv_cents", "is", null)
+    .gt("fmv_cents", 0)
+    .order("fmv_cents", { ascending: false })
+    .limit(60);
+
+  const ownedCards: OwnedCard[] = (ownedRows ?? []).map((c) => ({
+    id: c.id,
+    serial: c.serial,
+    fmvCents: c.fmv_cents ?? 0,
+    grade: c.auto_grade_label ?? null,
+    title: cardTitle(c),
+  }));
 
   const { data: openings } = await supabase
     .from("pack_openings")
@@ -150,10 +229,23 @@ export default async function BuyPage() {
           categories={categories}
           activeCategory={activeCategory}
           poolAvailable={((poolCount as number) ?? 0) > 0}
+          ownedCards={ownedCards}
           balance={balance}
+          withdrawable={withdrawable}
           pityByTier={pityByTier}
-          dailyClaimable={dailyClaimable}
-          dailyStreak={dailyStreak}
+          credits={credits}
+          spinPrizes={spinPrizes}
+          checkin={{
+            claimable: checkinClaimable,
+            streak: profile?.checkin_streak ?? 0,
+            total: profile?.checkin_total ?? 0,
+          }}
+          spinClaimable={spinClaimable}
+          emailVerified={emailVerified}
+          referralCode={referralCode}
+          referralUrl={referralUrl}
+          referralQualified={refQualified ?? 0}
+          referralPending={refPending ?? 0}
           staff={isStaff(await getRole())}
           ageConfirmed={ageConfirmed}
           pausedUntil={pausedUntil}

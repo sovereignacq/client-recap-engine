@@ -22,6 +22,26 @@ const CARD_STATUSES = [
   "returned",
 ] as const;
 
+/** Staff: settle a withdrawal request. Rejecting refunds the held funds. */
+export async function adminProcessWithdrawal(
+  id: string,
+  status: "paid" | "rejected",
+  note?: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  if (status !== "paid" && status !== "rejected") {
+    return { error: "Invalid status." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("process_withdrawal", {
+    p_id: id,
+    p_status: status,
+    p_note: note ?? null,
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/admin/withdrawals");
+}
+
 /**
  * Staff/owner action — operates across all customers (staff RLS permits it),
  * so there is intentionally no owner_id filter. Always role-guarded first.

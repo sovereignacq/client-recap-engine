@@ -7,13 +7,28 @@ import {
   openPackAction,
   topUpAction,
   sellBackAction,
-  claimDailyAction,
   createDepositCheckoutAction,
   confirmAgeAction,
   setPlayPauseAction,
   setPlayLimitsAction,
+  tradeUpAction,
+  redeemPackCreditAction,
+  dailyCheckinAction,
+  dailySpinAction,
+  requestWithdrawalAction,
   type OpenResult,
+  type TradeUpResult,
+  type RedeemResult,
+  type SpinResult,
 } from "./actions";
+
+const WITHDRAW_METHODS = [
+  { value: "paypal", label: "PayPal" },
+  { value: "venmo", label: "Venmo" },
+  { value: "cashapp", label: "Cash App" },
+  { value: "zelle", label: "Zelle" },
+  { value: "other", label: "Other" },
+];
 
 export type Bucket = {
   key: string;
@@ -41,6 +56,39 @@ export type Category = {
   active: boolean;
   priceMult: number;
 };
+export type OwnedCard = {
+  id: string;
+  serial: string;
+  fmvCents: number;
+  grade: string | null;
+  title: string;
+};
+export type PackCredit = {
+  id: string;
+  tierKey: string | null;
+  mystery: boolean;
+  source: string;
+};
+export type SpinPrize = {
+  key: string;
+  label: string;
+  kind: "cash" | "pack" | "none";
+  amountCents: number;
+  tierKey: string | null;
+};
+
+const CREDIT_SOURCE_LABEL: Record<string, string> = {
+  referral_signup: "Welcome pack",
+  referral_bonus: "Referral reward",
+  referral_mystery: "Mystery reward",
+  streak_week: "Weekly streak",
+  streak_month: "Monthly streak",
+  daily_spin: "Daily spin",
+  admin: "Gift",
+};
+
+// House keeps 15% on a consolidation trade-up; mirrors trade_up() in the DB.
+const TRADEUP_RATE = 0.85;
 
 const OUTCOME_LABEL: Record<string, string> = {
   below: "Below",
@@ -67,6 +115,9 @@ const TIER_ACCENTS = [
 ];
 
 type Won = Extract<OpenResult, { ok: true }>;
+type TradeWon = Extract<TradeUpResult, { ok: true }>;
+type Redeemed = Extract<RedeemResult, { ok: true }>;
+type SpinWin = Extract<SpinResult, { ok: true }>;
 
 export function BuyClient({
   tiers,
@@ -74,10 +125,19 @@ export function BuyClient({
   categories,
   activeCategory,
   poolAvailable,
+  ownedCards,
   balance: initialBalance,
+  withdrawable: initialWithdrawable,
   pityByTier: initialPity,
-  dailyClaimable: initialDailyClaimable,
-  dailyStreak: initialStreak,
+  credits: initialCredits,
+  spinPrizes,
+  checkin: initialCheckin,
+  spinClaimable: initialSpinClaimable,
+  emailVerified,
+  referralCode,
+  referralUrl,
+  referralQualified,
+  referralPending,
   staff,
   ageConfirmed,
   pausedUntil,
@@ -89,10 +149,19 @@ export function BuyClient({
   categories: Category[];
   activeCategory: string;
   poolAvailable: boolean;
+  ownedCards: OwnedCard[];
   balance: number;
+  withdrawable: number;
   pityByTier: Record<string, number>;
-  dailyClaimable: boolean;
-  dailyStreak: number;
+  credits: PackCredit[];
+  spinPrizes: SpinPrize[];
+  checkin: { claimable: boolean; streak: number; total: number };
+  spinClaimable: boolean;
+  emailVerified: boolean;
+  referralCode: string;
+  referralUrl: string;
+  referralQualified: number;
+  referralPending: number;
   staff: boolean;
   ageConfirmed: boolean;
   pausedUntil: string | null;
@@ -103,12 +172,6 @@ export function BuyClient({
   const [isOpening, startOpen] = useTransition();
   const [isFunding, startFund] = useTransition();
   const [isSelling, startSell] = useTransition();
-  const [isClaiming, startClaim] = useTransition();
-  const [daily, setDaily] = useState({
-    claimable: initialDailyClaimable,
-    streak: initialStreak,
-  });
-  const [dailyMsg, setDailyMsg] = useState<string | null>(null);
 
   const [ageOk, setAgeOk] = useState(ageConfirmed);
   const [isPlay, startPlay] = useTransition();
@@ -148,7 +211,37 @@ export function BuyClient({
   const [error, setError] = useState<string | null>(null);
 
   const [balance, setBalance] = useState(initialBalance);
+  const [withdrawable, setWithdrawable] = useState(initialWithdrawable);
   const [pity, setPity] = useState<Record<string, number>>(initialPity);
+
+  const [isWithdrawing, startWithdraw] = useTransition();
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [wAmount, setWAmount] = useState("");
+  const [wMethod, setWMethod] = useState(WITHDRAW_METHODS[0].value);
+  const [wHandle, setWHandle] = useState("");
+  const [wMsg, setWMsg] = useState<string | null>(null);
+
+  const submitWithdraw = () => {
+    setWMsg(null);
+    const cents = Math.round(Number(wAmount) * 100);
+    if (!Number.isFinite(cents) || cents < 500) {
+      setWMsg("Minimum withdrawal is $5.");
+      return;
+    }
+    startWithdraw(async () => {
+      const r = await requestWithdrawalAction(cents, wMethod, wHandle);
+      if (r.ok) {
+        setBalance(r.balance);
+        setWithdrawable(r.withdrawable);
+        setWAmount("");
+        setWHandle("");
+        setShowWithdraw(false);
+        setWMsg("Withdrawal requested — we'll process it shortly.");
+      } else {
+        setWMsg(r.error);
+      }
+    });
+  };
 
   // Reveal suspense + value count-up
   const [phase, setPhase] = useState<"charging" | "revealed">("revealed");
@@ -226,30 +319,158 @@ export function BuyClient({
     });
   };
 
-  const claimDaily = () => {
-    setDailyMsg(null);
-    startClaim(async () => {
-      const r = await claimDailyAction();
+  // Daily rewards: login check-in streak, daily spin, and free-pack credits.
+  const [isCheckin, startCheckin] = useTransition();
+  const [isSpinning, startSpin] = useTransition();
+  const [isRedeeming, startRedeem] = useTransition();
+  const [checkin, setCheckin] = useState(initialCheckin);
+  const [spinAvailable, setSpinAvailable] = useState(initialSpinClaimable);
+  const [credits, setCredits] = useState(initialCredits);
+  const [rewardMsg, setRewardMsg] = useState<string | null>(null);
+  const [redeemingId, setRedeemingId] = useState<string | null>(null);
+  const [redeemResult, setRedeemResult] = useState<Redeemed | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const tierNameMap = useMemo(
+    () => new Map(tiers.map((t) => [t.key, t.name])),
+    [tiers],
+  );
+  const tierLabel = (key: string | null) =>
+    key ? (tierNameMap.get(key) ?? key) : "Mystery";
+
+  const doCheckin = () => {
+    setRewardMsg(null);
+    startCheckin(async () => {
+      const r = await dailyCheckinAction();
       if (r.ok) {
-        setBalance(r.balance);
-        setDaily({ claimable: false, streak: r.streak });
-        setDailyMsg(
-          `+${formatMoneyCents(r.rewardCents)} · ${r.streak}-day streak`,
-        );
+        setCheckin({ claimable: false, streak: r.streak, total: r.total });
+        if (r.granted !== "none") {
+          setRewardMsg(
+            `🔥 ${r.streak}-day streak — free ${tierLabel(r.tier)} pack unlocked!`,
+          );
+          router.refresh();
+        } else {
+          setRewardMsg(`Checked in — ${r.streak}-day streak`);
+        }
       } else {
-        setDailyMsg(r.error);
+        setRewardMsg(r.error);
       }
     });
   };
 
-  const sellBack = (won: Won) => {
+  // Spin wheel suspense
+  const [spinResult, setSpinResult] = useState<SpinWin | null>(null);
+  const [spinPhase, setSpinPhase] = useState<"idle" | "spinning" | "landed">(
+    "idle",
+  );
+  const [spinFace, setSpinFace] = useState(0);
+
+  const doSpin = () => {
+    setRewardMsg(null);
+    startSpin(async () => {
+      const r = await dailySpinAction();
+      if (!r.ok) {
+        setRewardMsg(r.error);
+        return;
+      }
+      setSpinAvailable(false);
+      if (r.kind === "cash") setBalance(r.balance);
+      if (r.kind === "pack") router.refresh();
+      setSpinResult(r);
+      setSpinPhase("spinning");
+    });
+  };
+
+  // Cycle the wheel faces, then land on the won prize.
+  useEffect(() => {
+    if (spinPhase !== "spinning" || !spinResult) return;
+    const winIdx = Math.max(
+      0,
+      spinPrizes.findIndex((p) => p.key === spinResult.prizeKey),
+    );
+    let ticks = 0;
+    const total = 18 + winIdx;
+    const id = setInterval(() => {
+      ticks += 1;
+      setSpinFace((f) => (f + 1) % Math.max(1, spinPrizes.length));
+      if (ticks >= total) {
+        clearInterval(id);
+        setSpinFace(winIdx);
+        setSpinPhase("landed");
+      }
+    }, 80);
+    return () => clearInterval(id);
+  }, [spinPhase, spinResult, spinPrizes]);
+
+  const redeem = (creditId: string) => {
+    setError(null);
+    setRedeemingId(creditId);
+    startRedeem(async () => {
+      const r = await redeemPackCreditAction(creditId);
+      setRedeemingId(null);
+      if (r.ok) {
+        setCredits((cs) => cs.filter((c) => c.id !== creditId));
+        setSold(false);
+        setRedeemResult(r);
+      } else {
+        setError(r.error);
+      }
+    });
+  };
+
+  const copyReferral = () => {
+    if (!referralUrl) return;
+    navigator.clipboard?.writeText(referralUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const sellBack = (cardId: string) => {
     startSell(async () => {
-      const r = await sellBackAction(won.cardId);
+      const r = await sellBackAction(cardId);
       if (r.ok) {
         setBalance(r.balance);
         setSold(true);
       } else {
         setError(r.error);
+      }
+    });
+  };
+
+  // Trade-up (consolidation)
+  const [isTrading, startTrade] = useTransition();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tradeResult, setTradeResult] = useState<TradeWon | null>(null);
+  const [tradeError, setTradeError] = useState<string | null>(null);
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const selectedSumCents = useMemo(
+    () =>
+      ownedCards
+        .filter((c) => selected.has(c.id))
+        .reduce((s, c) => s + c.fmvCents, 0),
+    [ownedCards, selected],
+  );
+  const estTradeCents = Math.floor(selectedSumCents * TRADEUP_RATE);
+
+  const tradeUp = () => {
+    setTradeError(null);
+    const ids = [...selected];
+    startTrade(async () => {
+      const r = await tradeUpAction(ids);
+      if (r.ok) {
+        setSelected(new Set());
+        setTradeResult(r);
+      } else {
+        setTradeError(r.error);
       }
     });
   };
@@ -335,16 +556,12 @@ export function BuyClient({
           <p className="text-2xl font-semibold tabular-nums">
             {formatMoneyCents(balance)}
           </p>
+          <p className="text-[11px] text-zinc-500">
+            {formatMoneyCents(withdrawable)} withdrawable · rest is bonus (play
+            only)
+          </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            disabled={isClaiming || !daily.claimable}
-            onClick={claimDaily}
-            className="rounded-none bg-black px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-          >
-            {daily.claimable ? "Claim daily" : `Daily · ${daily.streak}🔥`}
-          </button>
           {TOPUP_PRESETS.map((c) => (
             <button
               key={c}
@@ -356,8 +573,67 @@ export function BuyClient({
               Add {formatMoneyCents(c)}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setShowWithdraw((s) => !s)}
+            disabled={withdrawable < 500}
+            title={withdrawable < 500 ? "Minimum withdrawal is $5" : undefined}
+            className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 active:scale-95 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
+          >
+            Withdraw
+          </button>
         </div>
       </div>
+      {showWithdraw && (
+        <div className="space-y-3 border border-black/10 p-5 dark:border-white/15">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+            Cash out · {formatMoneyCents(withdrawable)} available
+          </p>
+          <p className="text-xs text-zinc-500">
+            Minimum $5. Only deposited funds can be withdrawn — bonus and reward
+            money stays in-app.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <input
+              value={wAmount}
+              onChange={(e) => setWAmount(e.target.value)}
+              inputMode="decimal"
+              placeholder="Amount (USD)"
+              className="rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black dark:border-white/20 dark:focus:border-white"
+            />
+            <select
+              value={wMethod}
+              onChange={(e) => setWMethod(e.target.value)}
+              className="rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black dark:border-white/20 dark:focus:border-white"
+            >
+              {WITHDRAW_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <input
+              value={wHandle}
+              onChange={(e) => setWHandle(e.target.value)}
+              placeholder="Send to (email / @handle)"
+              className="rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black dark:border-white/20 dark:focus:border-white"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={isWithdrawing}
+            onClick={submitWithdraw}
+            className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black"
+          >
+            {isWithdrawing ? "Requesting…" : "Request withdrawal"}
+          </button>
+        </div>
+      )}
+      {wMsg && (
+        <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+          {wMsg}
+        </p>
+      )}
       {staff && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">
@@ -376,11 +652,125 @@ export function BuyClient({
           ))}
         </div>
       )}
-      {dailyMsg && (
-        <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
-          {dailyMsg}
+      {!emailVerified && (
+        <p className="border-l-2 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          Verify your email to unlock daily rewards, the spin, and free packs.
+          Check your inbox for the confirmation link.
         </p>
       )}
+
+      {/* Daily rewards: check-in streak + spin */}
+      <div className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-2 dark:border-white/15 dark:bg-white/15">
+        <div className="flex items-center justify-between gap-3 bg-white px-5 py-4 dark:bg-black">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+              Daily check-in
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">
+              {checkin.streak}
+              <span className="ml-1 text-base">🔥</span>
+            </p>
+            <p className="text-[11px] text-zinc-500">
+              7 days = free pack · 30 = bigger pack
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isCheckin || !checkin.claimable || !emailVerified}
+            onClick={doCheckin}
+            className="rounded-none bg-black px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            {checkin.claimable ? (isCheckin ? "…" : "Check in") : "Done ✓"}
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-3 bg-white px-5 py-4 dark:bg-black">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+              Daily spin
+            </p>
+            <p className="mt-1 text-sm text-zinc-500">
+              One free spin a day — cash or a pack.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isSpinning || !spinAvailable || !emailVerified}
+            onClick={doSpin}
+            className="rounded-none bg-gradient-to-br from-violet-600 to-fuchsia-600 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:opacity-90 active:scale-95 disabled:opacity-40"
+          >
+            {spinAvailable ? (isSpinning ? "…" : "Spin") : "Spun ✓"}
+          </button>
+        </div>
+      </div>
+      {rewardMsg && (
+        <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+          {rewardMsg}
+        </p>
+      )}
+
+      {/* Free packs to redeem */}
+      {credits.length > 0 && (
+        <section className="space-y-3 border border-black/10 p-5 dark:border-white/15">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+            Free packs · {credits.length}
+          </h2>
+          <div className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-2 dark:border-white/15 dark:bg-white/15">
+            {credits.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between gap-3 bg-white px-4 py-3 dark:bg-black"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {c.mystery ? "Mystery pack" : `${tierLabel(c.tierKey)} pack`}
+                  </p>
+                  <p className="truncate text-[11px] uppercase tracking-[0.1em] text-zinc-500">
+                    {CREDIT_SOURCE_LABEL[c.source] ?? "Reward"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isRedeeming || !emailVerified || !poolAvailable}
+                  onClick={() => redeem(c.id)}
+                  className="shrink-0 rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                >
+                  {redeemingId === c.id ? "Opening…" : "Open free"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Referral */}
+      <section className="space-y-3 border border-black/10 p-5 dark:border-white/15">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+            Invite friends
+          </h2>
+          <span className="text-[11px] text-zinc-500">
+            {referralQualified} joined · {referralPending} pending
+          </span>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Share your code. Your friend gets a free pack, and once they verify
+          their email and open it, you get two free packs — including a mystery
+          one.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <code className="rounded-none border border-black/15 px-3 py-2 text-sm font-semibold tracking-[0.2em] dark:border-white/20">
+            {referralCode || "—"}
+          </code>
+          <button
+            type="button"
+            onClick={copyReferral}
+            disabled={!referralUrl}
+            className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            {copied ? "Copied!" : "Copy invite link"}
+          </button>
+        </div>
+      </section>
 
       {/* Odds level */}
       <div className="flex flex-wrap items-center gap-3">
@@ -494,6 +884,102 @@ export function BuyClient({
           );
         })}
       </div>
+
+      {/* Trade-up: consolidate several cards into one bigger pull. */}
+      <details className="border border-black/10 dark:border-white/15">
+        <summary className="cursor-pointer list-none px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400 transition hover:text-black dark:hover:text-white">
+          Trade up{" "}
+          {ownedCards.length > 0 && (
+            <span className="font-normal normal-case tracking-normal text-zinc-400">
+              · combine {ownedCards.length} card{ownedCards.length > 1 ? "s" : ""} into one
+            </span>
+          )}
+        </summary>
+        <div className="space-y-4 border-t border-black/10 px-5 py-4 dark:border-white/15">
+          <p className="text-xs text-zinc-500">
+            Pick two or more cards you own and trade them in for one stronger
+            card from the pool — worth up to 85% of their combined value. The
+            cards you trade in go back into circulation.
+          </p>
+
+          {ownedCards.length === 0 ? (
+            <p className="border border-dashed border-black/20 p-6 text-center text-sm text-zinc-500 dark:border-white/20">
+              Win and keep some cards first, then combine them here.
+            </p>
+          ) : (
+            <>
+              <div className="grid max-h-72 grid-cols-1 gap-px overflow-y-auto border border-black/10 bg-black/10 sm:grid-cols-2 dark:border-white/15 dark:bg-white/15">
+                {ownedCards.map((c) => {
+                  const on = selected.has(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => toggleSelect(c.id)}
+                      className={`flex items-center justify-between gap-3 px-4 py-3 text-left transition ${
+                        on
+                          ? "bg-black text-white dark:bg-white dark:text-black"
+                          : "bg-white hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
+                      }`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">
+                          {c.title}
+                        </span>
+                        <span
+                          className={`block truncate text-[11px] ${
+                            on ? "text-zinc-300 dark:text-zinc-600" : "text-zinc-500"
+                          }`}
+                        >
+                          {c.grade ? `${c.grade} · ` : ""}
+                          {c.serial}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-sm tabular-nums">
+                        {formatMoneyCents(c.fmvCents)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {tradeError && (
+                <p className="border-l-2 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  {tradeError}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm">
+                  <span className="text-zinc-500">
+                    {selected.size} selected ·{" "}
+                  </span>
+                  <span className="tabular-nums">
+                    {formatMoneyCents(selectedSumCents)}
+                  </span>
+                  {selected.size >= 2 && (
+                    <span className="text-zinc-500">
+                      {" "}
+                      → trade value{" "}
+                      <span className="font-semibold tabular-nums text-black dark:text-white">
+                        {formatMoneyCents(estTradeCents)}
+                      </span>
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={selected.size < 2 || isTrading || paused}
+                  onClick={tradeUp}
+                  className="rounded-none bg-black px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 active:scale-[0.97] disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                >
+                  {isTrading ? "Trading…" : "Trade up"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </details>
 
       <details className="border border-black/10 dark:border-white/15">
         <summary className="cursor-pointer list-none px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400 transition hover:text-black dark:hover:text-white">
@@ -624,7 +1110,7 @@ export function BuyClient({
                     <button
                       type="button"
                       disabled={isSelling}
-                      onClick={() => sellBack(result)}
+                      onClick={() => sellBack(result.cardId)}
                       className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10 disabled:opacity-40"
                     >
                       {isSelling ? "…" : `Sell back +${formatMoneyCents(result.buybackCents)}`}
@@ -650,6 +1136,181 @@ export function BuyClient({
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {tradeResult && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => {
+            setTradeResult(null);
+            router.refresh();
+          }}
+        >
+          <div
+            className="w-full max-w-sm overflow-hidden border border-white/15 bg-black p-8 text-center text-white animate-[fadeIn_300ms_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-300">
+              Traded up
+            </p>
+            <h3 className="mt-4 text-lg font-semibold">{tradeResult.title}</h3>
+            <p className="mt-1 font-mono text-xs text-zinc-400">
+              {tradeResult.serial}
+            </p>
+            {tradeResult.grade && (
+              <p className="mt-1 text-sm text-zinc-300">{tradeResult.grade}</p>
+            )}
+            <p className="mt-5 text-4xl font-semibold tabular-nums">
+              {formatMoneyCents(tradeResult.fmvCents)}
+            </p>
+            <p className="mt-1 text-xs uppercase tracking-[0.15em] text-zinc-400">
+              {tradeResult.tradedCount} cards in ·{" "}
+              {formatMoneyCents(tradeResult.inputCents)}
+            </p>
+            <div className="mt-7 flex gap-3">
+              <a
+                href={`/dashboard/cards/${tradeResult.cardId}`}
+                className="flex-1 rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200"
+              >
+                View card
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setTradeResult(null);
+                  router.refresh();
+                }}
+                className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {spinResult && spinPhase !== "idle" && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => {
+            if (spinPhase === "landed") {
+              setSpinResult(null);
+              setSpinPhase("idle");
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-sm overflow-hidden border border-white/15 bg-black p-8 text-center text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-fuchsia-300">
+              Daily spin
+            </p>
+            {spinPhase === "spinning" ? (
+              <div className="mt-6 py-6">
+                <div className="mx-auto flex h-16 items-center justify-center border border-white/15 bg-gradient-to-br from-violet-700/40 to-fuchsia-700/40 px-4 text-lg font-semibold">
+                  {spinPrizes[spinFace]?.label ?? "…"}
+                </div>
+                <p className="mt-4 animate-pulse text-[11px] uppercase tracking-[0.4em] text-zinc-400">
+                  Spinning…
+                </p>
+              </div>
+            ) : (
+              <div className="animate-[fadeIn_300ms_ease-out]">
+                <h3 className="mt-6 text-3xl font-semibold">
+                  {spinResult.kind === "cash"
+                    ? `+${formatMoneyCents(spinResult.amountCents)}`
+                    : spinResult.kind === "pack"
+                      ? "Free pack!"
+                      : "Better luck tomorrow"}
+                </h3>
+                <p className="mt-2 text-sm text-zinc-300">{spinResult.label}</p>
+                {spinResult.kind === "pack" && (
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.15em] text-zinc-400">
+                    Added to your free packs
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSpinResult(null);
+                    setSpinPhase("idle");
+                  }}
+                  className="mt-7 w-full rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200"
+                >
+                  Sweet
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {redeemResult && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => {
+            setRedeemResult(null);
+            router.refresh();
+          }}
+        >
+          <div
+            className="w-full max-w-sm overflow-hidden border border-white/15 bg-black p-8 text-center text-white animate-[fadeIn_300ms_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-300">
+              Free pack opened
+            </p>
+            <h3 className="mt-4 text-lg font-semibold">{redeemResult.title}</h3>
+            <p className="mt-1 font-mono text-xs text-zinc-400">
+              {redeemResult.serial}
+            </p>
+            {redeemResult.grade && (
+              <p className="mt-1 text-sm text-zinc-300">{redeemResult.grade}</p>
+            )}
+            <p className="mt-5 text-4xl font-semibold tabular-nums">
+              {formatMoneyCents(redeemResult.fmvCents)}
+            </p>
+            <p className="mt-1 text-xs uppercase tracking-[0.15em] text-emerald-400">
+              Free — all yours
+            </p>
+
+            {sold ? (
+              <p className="mt-6 text-sm text-emerald-400">
+                Sold back · wallet {formatMoneyCents(balance)}
+              </p>
+            ) : (
+              <div className="mt-7 flex gap-3">
+                <button
+                  type="button"
+                  disabled={isSelling}
+                  onClick={() => sellBack(redeemResult.cardId)}
+                  className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10 disabled:opacity-40"
+                >
+                  {isSelling
+                    ? "…"
+                    : `Sell back +${formatMoneyCents(redeemResult.buybackCents)}`}
+                </button>
+                <a
+                  href={`/dashboard/cards/${redeemResult.cardId}`}
+                  className="flex-1 rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200"
+                >
+                  Keep
+                </a>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setRedeemResult(null);
+                router.refresh();
+              }}
+              className="mt-3 text-[11px] uppercase tracking-[0.15em] text-zinc-400 hover:text-white"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

@@ -38,6 +38,9 @@ export default async function AdminLayout({
             <Link href="/admin/offers" className="text-zinc-500 hover:text-black dark:hover:text-white">
               Sell offers
             </Link>
+            <Link href="/admin/withdrawals" className="text-zinc-500 hover:text-black dark:hover:text-white">
+              Withdrawals
+            </Link>
             <Link href="/admin/economics" className="text-zinc-500 hover:text-black dark:hover:text-white">
               Economics
             </Link>
