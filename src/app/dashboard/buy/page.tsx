@@ -71,10 +71,18 @@ export default async function BuyPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("balance_cents, last_daily_at, daily_streak")
+    .select(
+      "balance_cents, last_daily_at, daily_streak, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents",
+    )
     .eq("id", user.id)
     .maybeSingle();
   const balance = profile?.balance_cents ?? 0;
+  const ageConfirmed = !!profile?.age_confirmed_at;
+  const pausedUntil =
+    profile?.play_paused_until &&
+    new Date(profile.play_paused_until) > new Date()
+      ? profile.play_paused_until
+      : null;
 
   const now = new Date();
   const startOfTodayUTC = Date.UTC(
@@ -145,6 +153,10 @@ export default async function BuyPage() {
           dailyClaimable={dailyClaimable}
           dailyStreak={dailyStreak}
           staff={isStaff(await getRole())}
+          ageConfirmed={ageConfirmed}
+          pausedUntil={pausedUntil}
+          spendLimitCents={profile?.daily_spend_limit_cents ?? null}
+          depositLimitCents={profile?.daily_deposit_limit_cents ?? null}
         />
 
         {feed.length > 0 && (

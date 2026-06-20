@@ -9,6 +9,9 @@ import {
   sellBackAction,
   claimDailyAction,
   createDepositCheckoutAction,
+  confirmAgeAction,
+  setPlayPauseAction,
+  setPlayLimitsAction,
   type OpenResult,
 } from "./actions";
 
@@ -51,6 +54,18 @@ const MODE_DESC: Record<string, string> = {
 };
 const TOPUP_PRESETS = [500, 2000, 5000, 10000];
 
+// Rarity-style accents per tier (low → high), for a gamier feel.
+const TIER_ACCENTS = [
+  "bg-zinc-400",
+  "bg-emerald-500",
+  "bg-sky-500",
+  "bg-teal-500",
+  "bg-violet-500",
+  "bg-orange-500",
+  "bg-pink-500",
+  "bg-amber-400",
+];
+
 type Won = Extract<OpenResult, { ok: true }>;
 
 export function BuyClient({
@@ -64,6 +79,10 @@ export function BuyClient({
   dailyClaimable: initialDailyClaimable,
   dailyStreak: initialStreak,
   staff,
+  ageConfirmed,
+  pausedUntil,
+  spendLimitCents,
+  depositLimitCents,
 }: {
   tiers: Tier[];
   modes: Mode[];
@@ -75,6 +94,10 @@ export function BuyClient({
   dailyClaimable: boolean;
   dailyStreak: number;
   staff: boolean;
+  ageConfirmed: boolean;
+  pausedUntil: string | null;
+  spendLimitCents: number | null;
+  depositLimitCents: number | null;
 }) {
   const router = useRouter();
   const [isOpening, startOpen] = useTransition();
@@ -86,6 +109,39 @@ export function BuyClient({
     streak: initialStreak,
   });
   const [dailyMsg, setDailyMsg] = useState<string | null>(null);
+
+  const [ageOk, setAgeOk] = useState(ageConfirmed);
+  const [isPlay, startPlay] = useTransition();
+  const paused = !!pausedUntil;
+  const [spendInput, setSpendInput] = useState(
+    spendLimitCents ? String(Math.round(spendLimitCents / 100)) : "",
+  );
+  const [depositInput, setDepositInput] = useState(
+    depositLimitCents ? String(Math.round(depositLimitCents / 100)) : "",
+  );
+  const [playMsg, setPlayMsg] = useState<string | null>(null);
+
+  const confirmAge = () =>
+    startPlay(async () => {
+      const r = await confirmAgeAction();
+      if (r.ok) setAgeOk(true);
+      else setPlayMsg(r.error);
+    });
+  const takeBreak = (days: number) => {
+    if (!confirm(`Pause play for ${days} day(s)? You can't shorten this early.`)) return;
+    startPlay(async () => {
+      const r = await setPlayPauseAction(days);
+      if (r.ok) router.refresh();
+      else setPlayMsg(r.error);
+    });
+  };
+  const saveLimits = () =>
+    startPlay(async () => {
+      const sp = spendInput ? Math.round(Number(spendInput) * 100) : null;
+      const dp = depositInput ? Math.round(Number(depositInput) * 100) : null;
+      const r = await setPlayLimitsAction(sp, dp);
+      setPlayMsg(r.ok ? "Limits saved." : r.error);
+    });
   const [openingKey, setOpeningKey] = useState<string | null>(null);
   const [result, setResult] = useState<Won | null>(null);
   const [sold, setSold] = useState(false);
@@ -200,6 +256,45 @@ export function BuyClient({
 
   return (
     <section className="space-y-5">
+      {!ageOk && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-sm border border-white/15 bg-black p-8 text-center text-white">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-400">
+              Before you play
+            </p>
+            <h3 className="mt-4 text-xl font-semibold">Are you 18 or older?</h3>
+            <p className="mt-3 text-sm text-zinc-400">
+              Packs are a game of chance with real value. You must be 18+ to play.
+              Please play responsibly and within your means.
+            </p>
+            <div className="mt-7 flex gap-3">
+              <a
+                href="/dashboard"
+                className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10"
+              >
+                Not yet
+              </a>
+              <button
+                type="button"
+                disabled={isPlay}
+                onClick={confirmAge}
+                className="flex-1 rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200 disabled:opacity-50"
+              >
+                {isPlay ? "…" : "I'm 18+"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paused && (
+        <p className="border-l-2 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          You&apos;re taking a break from play until{" "}
+          {new Date(pausedUntil!).toLocaleDateString()}. Packs and deposits are
+          paused until then.
+        </p>
+      )}
+
       {/* Category columns */}
       <div className="grid grid-cols-2 gap-px border border-black/10 bg-black/10 sm:grid-cols-3 lg:grid-cols-6 dark:border-white/15 dark:bg-white/15">
         {categories.map((c) => {
@@ -328,7 +423,7 @@ export function BuyClient({
       )}
 
       <div className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-2 lg:grid-cols-3 dark:border-white/15 dark:bg-white/15">
-        {tiers.map((t) => {
+        {tiers.map((t, ti) => {
           const priceMult = mode?.priceMult ?? 1;
           const effPrice = Math.round(t.priceCents * catMult * priceMult);
           const adj = t.odds.map((b) => ({
@@ -346,6 +441,9 @@ export function BuyClient({
               key={t.key}
               className="flex flex-col bg-white p-6 transition-colors hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
             >
+              <span
+                className={`mb-3 h-1 w-10 ${TIER_ACCENTS[ti % TIER_ACCENTS.length]}`}
+              />
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
                 {t.name}
               </p>
@@ -383,7 +481,7 @@ export function BuyClient({
               <button
                 type="button"
                 onClick={() => open(t)}
-                disabled={!poolAvailable || isOpening || !canAfford}
+                disabled={!poolAvailable || isOpening || !canAfford || paused}
                 className="mt-5 rounded-none bg-black px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 active:scale-[0.97] disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
               >
                 {openingKey === t.key
@@ -396,6 +494,71 @@ export function BuyClient({
           );
         })}
       </div>
+
+      <details className="border border-black/10 dark:border-white/15">
+        <summary className="cursor-pointer list-none px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400 transition hover:text-black dark:hover:text-white">
+          Play settings
+        </summary>
+        <div className="space-y-4 border-t border-black/10 px-5 py-4 dark:border-white/15">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                Daily spend limit (USD)
+              </label>
+              <input
+                value={spendInput}
+                onChange={(e) => setSpendInput(e.target.value)}
+                inputMode="numeric"
+                placeholder="No limit"
+                className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black dark:border-white/20 dark:focus:border-white"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                Daily deposit limit (USD)
+              </label>
+              <input
+                value={depositInput}
+                onChange={(e) => setDepositInput(e.target.value)}
+                inputMode="numeric"
+                placeholder="No limit"
+                className="mt-1 w-full rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black dark:border-white/20 dark:focus:border-white"
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={isPlay}
+            onClick={saveLimits}
+            className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black"
+          >
+            Save limits
+          </button>
+
+          <div className="border-t border-black/10 pt-4 dark:border-white/15">
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+              Take a break
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Pause packs and deposits. You can extend a break but not shorten it.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[1, 7, 30].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  disabled={isPlay}
+                  onClick={() => takeBreak(d)}
+                  className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 active:scale-95 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
+                >
+                  {d} day{d > 1 ? "s" : ""}
+                </button>
+              ))}
+            </div>
+          </div>
+          {playMsg && <p className="text-[11px] text-zinc-500">{playMsg}</p>}
+        </div>
+      </details>
 
       {result && (
         <div

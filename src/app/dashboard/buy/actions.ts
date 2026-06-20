@@ -102,6 +102,45 @@ export async function openPackAction(
   };
 }
 
+export type PlayResult = { ok: true } | { ok: false; error: string };
+
+/** Confirm the player is 18+. */
+export async function confirmAgeAction(): Promise<PlayResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  const { error } = await supabase.rpc("confirm_age");
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/buy");
+  return { ok: true };
+}
+
+/** Take a break from play for N days (can only extend). */
+export async function setPlayPauseAction(days: number): Promise<PlayResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_play_pause", { p_days: days });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/buy");
+  return { ok: true };
+}
+
+/** Set self-protective daily limits (cents; null/0 clears). */
+export async function setPlayLimitsAction(
+  spendCents: number | null,
+  depositCents: number | null,
+): Promise<PlayResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_play_limits", {
+    p_spend: spendCents ?? 0,
+    p_deposit: depositCents ?? 0,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/buy");
+  return { ok: true };
+}
+
 export type DepositResult = { ok: true; url: string } | { ok: false; error: string };
 
 /** Real money: start a Stripe Checkout session to fund the wallet. */
@@ -115,6 +154,30 @@ export async function createDepositCheckoutAction(
   if (!user) return { ok: false, error: "Not signed in." };
   if (!Number.isFinite(amountCents) || amountCents < 100 || amountCents > 1000000) {
     return { ok: false, error: "Choose a valid amount." };
+  }
+
+  // Responsible-play guards: respect an active break and the daily deposit cap.
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("play_paused_until, daily_deposit_limit_cents")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (prof?.play_paused_until && new Date(prof.play_paused_until) > new Date()) {
+    return { ok: false, error: "You're taking a break — deposits are paused." };
+  }
+  if (prof?.daily_deposit_limit_cents) {
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const { data: today } = await supabase
+      .from("wallet_transactions")
+      .select("amount_cents")
+      .eq("user_id", user.id)
+      .eq("kind", "topup")
+      .gte("created_at", startOfDay.toISOString());
+    const sum = (today ?? []).reduce((s, t) => s + (t.amount_cents ?? 0), 0);
+    if (sum + amountCents > prof.daily_deposit_limit_cents) {
+      return { ok: false, error: "That would pass your daily deposit limit." };
+    }
   }
 
   let stripe: ReturnType<typeof getStripe>;
