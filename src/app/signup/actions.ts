@@ -1,16 +1,16 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { siteUrl } from "@/lib/site-url";
 
 export async function signup(formData: FormData) {
   const supabase = await createClient();
-  const headerList = await headers();
 
-  const origin =
-    headerList.get("origin") ??
-    `https://${headerList.get("host") ?? "localhost:3000"}`;
+  // Always confirm against the production domain, regardless of where the
+  // signup request originated (localhost dev, a Vercel preview, etc.). This is
+  // what stops verification links from bouncing users to localhost.
+  const origin = siteUrl();
 
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
