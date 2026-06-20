@@ -81,11 +81,12 @@ export default async function BuyPage() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "balance_cents, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents, referral_code, checkin_streak, checkin_total, last_checkin_on, last_spin_on",
+      "balance_cents, withdrawable_cents, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents, referral_code, checkin_streak, checkin_total, last_checkin_on, last_spin_on",
     )
     .eq("id", user.id)
     .maybeSingle();
   const balance = profile?.balance_cents ?? 0;
+  const withdrawable = profile?.withdrawable_cents ?? 0;
   const ageConfirmed = !!profile?.age_confirmed_at;
   const emailVerified = !!user.email_confirmed_at;
   const pausedUntil =
@@ -224,6 +225,7 @@ export default async function BuyPage() {
           poolAvailable={((poolCount as number) ?? 0) > 0}
           ownedCards={ownedCards}
           balance={balance}
+          withdrawable={withdrawable}
           pityByTier={pityByTier}
           credits={credits}
           spinPrizes={spinPrizes}

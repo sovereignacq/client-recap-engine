@@ -349,6 +349,45 @@ export async function sellBackAction(cardId: string): Promise<SellBackResult> {
   return { ok: true, payoutCents: d.payout_cents, balance: d.balance_after };
 }
 
+export type WithdrawResult =
+  | { ok: true; balance: number; withdrawable: number }
+  | { ok: false; error: string };
+
+/** Request a cash-out (min $5, capped at the withdrawable balance). */
+export async function requestWithdrawalAction(
+  amountCents: number,
+  method: string,
+  handle: string,
+): Promise<WithdrawResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  if (!Number.isFinite(amountCents) || amountCents < 500) {
+    return { ok: false, error: "Minimum withdrawal is $5." };
+  }
+
+  const { data, error } = await supabase.rpc("request_withdrawal", {
+    p_amount_cents: Math.round(amountCents),
+    p_method: method,
+    p_handle: handle,
+  });
+  if (error) {
+    const msg = /exceeds your withdrawable/i.test(error.message)
+      ? "That's more than your withdrawable balance (bonus money can't be cashed out)."
+      : /minimum withdrawal/i.test(error.message)
+        ? "Minimum withdrawal is $5."
+        : /taking a break/i.test(error.message)
+          ? "You're taking a break — withdrawals are paused."
+          : error.message;
+    return { ok: false, error: msg };
+  }
+  const d = data as { balance_after: number; withdrawable_after: number };
+  revalidatePath("/dashboard/buy");
+  return { ok: true, balance: d.balance_after, withdrawable: d.withdrawable_after };
+}
+
 export type RedeemResult =
   | {
       ok: true;

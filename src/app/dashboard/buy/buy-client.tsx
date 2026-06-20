@@ -15,11 +15,20 @@ import {
   redeemPackCreditAction,
   dailyCheckinAction,
   dailySpinAction,
+  requestWithdrawalAction,
   type OpenResult,
   type TradeUpResult,
   type RedeemResult,
   type SpinResult,
 } from "./actions";
+
+const WITHDRAW_METHODS = [
+  { value: "paypal", label: "PayPal" },
+  { value: "venmo", label: "Venmo" },
+  { value: "cashapp", label: "Cash App" },
+  { value: "zelle", label: "Zelle" },
+  { value: "other", label: "Other" },
+];
 
 export type Bucket = {
   key: string;
@@ -118,6 +127,7 @@ export function BuyClient({
   poolAvailable,
   ownedCards,
   balance: initialBalance,
+  withdrawable: initialWithdrawable,
   pityByTier: initialPity,
   credits: initialCredits,
   spinPrizes,
@@ -141,6 +151,7 @@ export function BuyClient({
   poolAvailable: boolean;
   ownedCards: OwnedCard[];
   balance: number;
+  withdrawable: number;
   pityByTier: Record<string, number>;
   credits: PackCredit[];
   spinPrizes: SpinPrize[];
@@ -200,7 +211,37 @@ export function BuyClient({
   const [error, setError] = useState<string | null>(null);
 
   const [balance, setBalance] = useState(initialBalance);
+  const [withdrawable, setWithdrawable] = useState(initialWithdrawable);
   const [pity, setPity] = useState<Record<string, number>>(initialPity);
+
+  const [isWithdrawing, startWithdraw] = useTransition();
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [wAmount, setWAmount] = useState("");
+  const [wMethod, setWMethod] = useState(WITHDRAW_METHODS[0].value);
+  const [wHandle, setWHandle] = useState("");
+  const [wMsg, setWMsg] = useState<string | null>(null);
+
+  const submitWithdraw = () => {
+    setWMsg(null);
+    const cents = Math.round(Number(wAmount) * 100);
+    if (!Number.isFinite(cents) || cents < 500) {
+      setWMsg("Minimum withdrawal is $5.");
+      return;
+    }
+    startWithdraw(async () => {
+      const r = await requestWithdrawalAction(cents, wMethod, wHandle);
+      if (r.ok) {
+        setBalance(r.balance);
+        setWithdrawable(r.withdrawable);
+        setWAmount("");
+        setWHandle("");
+        setShowWithdraw(false);
+        setWMsg("Withdrawal requested — we'll process it shortly.");
+      } else {
+        setWMsg(r.error);
+      }
+    });
+  };
 
   // Reveal suspense + value count-up
   const [phase, setPhase] = useState<"charging" | "revealed">("revealed");
@@ -515,6 +556,10 @@ export function BuyClient({
           <p className="text-2xl font-semibold tabular-nums">
             {formatMoneyCents(balance)}
           </p>
+          <p className="text-[11px] text-zinc-500">
+            {formatMoneyCents(withdrawable)} withdrawable · rest is bonus (play
+            only)
+          </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {TOPUP_PRESETS.map((c) => (
@@ -528,8 +573,67 @@ export function BuyClient({
               Add {formatMoneyCents(c)}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setShowWithdraw((s) => !s)}
+            disabled={withdrawable < 500}
+            title={withdrawable < 500 ? "Minimum withdrawal is $5" : undefined}
+            className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 active:scale-95 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
+          >
+            Withdraw
+          </button>
         </div>
       </div>
+      {showWithdraw && (
+        <div className="space-y-3 border border-black/10 p-5 dark:border-white/15">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+            Cash out · {formatMoneyCents(withdrawable)} available
+          </p>
+          <p className="text-xs text-zinc-500">
+            Minimum $5. Only deposited funds can be withdrawn — bonus and reward
+            money stays in-app.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <input
+              value={wAmount}
+              onChange={(e) => setWAmount(e.target.value)}
+              inputMode="decimal"
+              placeholder="Amount (USD)"
+              className="rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black dark:border-white/20 dark:focus:border-white"
+            />
+            <select
+              value={wMethod}
+              onChange={(e) => setWMethod(e.target.value)}
+              className="rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black dark:border-white/20 dark:focus:border-white"
+            >
+              {WITHDRAW_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <input
+              value={wHandle}
+              onChange={(e) => setWHandle(e.target.value)}
+              placeholder="Send to (email / @handle)"
+              className="rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black dark:border-white/20 dark:focus:border-white"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={isWithdrawing}
+            onClick={submitWithdraw}
+            className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black"
+          >
+            {isWithdrawing ? "Requesting…" : "Request withdrawal"}
+          </button>
+        </div>
+      )}
+      {wMsg && (
+        <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+          {wMsg}
+        </p>
+      )}
       {staff && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">
