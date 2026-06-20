@@ -256,6 +256,76 @@ export async function claimDailyAction(): Promise<DailyResult> {
   return { ok: true, rewardCents: d.reward_cents, streak: d.streak, balance: d.balance_after };
 }
 
+export type TradeUpResult =
+  | {
+      ok: true;
+      cardId: string;
+      serial: string;
+      title: string;
+      grade: string | null;
+      fmvCents: number;
+      inputCents: number;
+      tradedCount: number;
+      outcome: "below" | "even" | "above";
+      buybackCents: number;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Consolidate several owned cards into one bigger card from the pool. The reward
+ * is capped at 85% of the combined value (house keeps 15%); trade_up() runs the
+ * whole swap atomically so it can't be gamed.
+ */
+export async function tradeUpAction(cardIds: string[]): Promise<TradeUpResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  if (!Array.isArray(cardIds) || cardIds.length < 2) {
+    return { ok: false, error: "Pick at least two cards to trade up." };
+  }
+
+  const { data, error } = await supabase.rpc("trade_up", {
+    p_card_ids: cardIds,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  const d = data as {
+    card_id: string;
+    serial: string;
+    fmv_cents: number;
+    input_cents: number;
+    traded: number;
+    outcome: "below" | "even" | "above";
+  };
+
+  const { data: card } = await supabase
+    .from("cards")
+    .select(
+      "card_year, manufacturer, set_name, player_or_character, card_number, variant, auto_grade_label",
+    )
+    .eq("id", d.card_id)
+    .maybeSingle();
+
+  revalidatePath("/dashboard/buy");
+  revalidatePath("/dashboard/cards");
+  revalidatePath("/dashboard");
+
+  return {
+    ok: true,
+    cardId: d.card_id,
+    serial: d.serial,
+    title: card ? cardTitle(card) : "Card",
+    grade: card?.auto_grade_label ?? null,
+    fmvCents: d.fmv_cents,
+    inputCents: d.input_cents,
+    tradedCount: d.traded,
+    outcome: d.outcome,
+    buybackCents: Math.round(d.fmv_cents * BUYBACK_PCT),
+  };
+}
+
 export type SellBackResult =
   | { ok: true; payoutCents: number; balance: number }
   | { ok: false; error: string };

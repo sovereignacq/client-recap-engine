@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { formatMoneyCents } from "@/lib/cards";
+import { cardTitle, formatMoneyCents } from "@/lib/cards";
 import { getRole, isStaff } from "@/lib/roles";
-import { BuyClient, type Tier, type Mode, type Category } from "./buy-client";
+import {
+  BuyClient,
+  type Tier,
+  type Mode,
+  type Category,
+  type OwnedCard,
+} from "./buy-client";
 
 export const maxDuration = 30;
 
@@ -104,6 +110,29 @@ export default async function BuyPage() {
     pityByTier[`${p.category_key}:${p.tier_key}`] = p.count;
   });
 
+  // Cards the player won and still holds — eligible to consolidate via trade-up.
+  const { data: ownedRows } = await supabase
+    .from("cards")
+    .select(
+      "id, serial, fmv_cents, auto_grade_label, card_year, manufacturer, set_name, player_or_character, card_number, variant",
+    )
+    .eq("owner_id", user.id)
+    .eq("status", "won")
+    .eq("in_inventory", false)
+    .is("archived_at", null)
+    .not("fmv_cents", "is", null)
+    .gt("fmv_cents", 0)
+    .order("fmv_cents", { ascending: false })
+    .limit(60);
+
+  const ownedCards: OwnedCard[] = (ownedRows ?? []).map((c) => ({
+    id: c.id,
+    serial: c.serial,
+    fmvCents: c.fmv_cents ?? 0,
+    grade: c.auto_grade_label ?? null,
+    title: cardTitle(c),
+  }));
+
   const { data: openings } = await supabase
     .from("pack_openings")
     .select("id, tier_key, price_cents, card_fmv_cents, outcome, profit_cents, created_at")
@@ -150,6 +179,7 @@ export default async function BuyPage() {
           categories={categories}
           activeCategory={activeCategory}
           poolAvailable={((poolCount as number) ?? 0) > 0}
+          ownedCards={ownedCards}
           balance={balance}
           pityByTier={pityByTier}
           dailyClaimable={dailyClaimable}

@@ -12,7 +12,9 @@ import {
   confirmAgeAction,
   setPlayPauseAction,
   setPlayLimitsAction,
+  tradeUpAction,
   type OpenResult,
+  type TradeUpResult,
 } from "./actions";
 
 export type Bucket = {
@@ -41,6 +43,16 @@ export type Category = {
   active: boolean;
   priceMult: number;
 };
+export type OwnedCard = {
+  id: string;
+  serial: string;
+  fmvCents: number;
+  grade: string | null;
+  title: string;
+};
+
+// House keeps 15% on a consolidation trade-up; mirrors trade_up() in the DB.
+const TRADEUP_RATE = 0.85;
 
 const OUTCOME_LABEL: Record<string, string> = {
   below: "Below",
@@ -67,6 +79,7 @@ const TIER_ACCENTS = [
 ];
 
 type Won = Extract<OpenResult, { ok: true }>;
+type TradeWon = Extract<TradeUpResult, { ok: true }>;
 
 export function BuyClient({
   tiers,
@@ -74,6 +87,7 @@ export function BuyClient({
   categories,
   activeCategory,
   poolAvailable,
+  ownedCards,
   balance: initialBalance,
   pityByTier: initialPity,
   dailyClaimable: initialDailyClaimable,
@@ -89,6 +103,7 @@ export function BuyClient({
   categories: Category[];
   activeCategory: string;
   poolAvailable: boolean;
+  ownedCards: OwnedCard[];
   balance: number;
   pityByTier: Record<string, number>;
   dailyClaimable: boolean;
@@ -250,6 +265,43 @@ export function BuyClient({
         setSold(true);
       } else {
         setError(r.error);
+      }
+    });
+  };
+
+  // Trade-up (consolidation)
+  const [isTrading, startTrade] = useTransition();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tradeResult, setTradeResult] = useState<TradeWon | null>(null);
+  const [tradeError, setTradeError] = useState<string | null>(null);
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const selectedSumCents = useMemo(
+    () =>
+      ownedCards
+        .filter((c) => selected.has(c.id))
+        .reduce((s, c) => s + c.fmvCents, 0),
+    [ownedCards, selected],
+  );
+  const estTradeCents = Math.floor(selectedSumCents * TRADEUP_RATE);
+
+  const tradeUp = () => {
+    setTradeError(null);
+    const ids = [...selected];
+    startTrade(async () => {
+      const r = await tradeUpAction(ids);
+      if (r.ok) {
+        setSelected(new Set());
+        setTradeResult(r);
+      } else {
+        setTradeError(r.error);
       }
     });
   };
@@ -495,6 +547,102 @@ export function BuyClient({
         })}
       </div>
 
+      {/* Trade-up: consolidate several cards into one bigger pull. */}
+      <details className="border border-black/10 dark:border-white/15">
+        <summary className="cursor-pointer list-none px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400 transition hover:text-black dark:hover:text-white">
+          Trade up{" "}
+          {ownedCards.length > 0 && (
+            <span className="font-normal normal-case tracking-normal text-zinc-400">
+              · combine {ownedCards.length} card{ownedCards.length > 1 ? "s" : ""} into one
+            </span>
+          )}
+        </summary>
+        <div className="space-y-4 border-t border-black/10 px-5 py-4 dark:border-white/15">
+          <p className="text-xs text-zinc-500">
+            Pick two or more cards you own and trade them in for one stronger
+            card from the pool — worth up to 85% of their combined value. The
+            cards you trade in go back into circulation.
+          </p>
+
+          {ownedCards.length === 0 ? (
+            <p className="border border-dashed border-black/20 p-6 text-center text-sm text-zinc-500 dark:border-white/20">
+              Win and keep some cards first, then combine them here.
+            </p>
+          ) : (
+            <>
+              <div className="grid max-h-72 grid-cols-1 gap-px overflow-y-auto border border-black/10 bg-black/10 sm:grid-cols-2 dark:border-white/15 dark:bg-white/15">
+                {ownedCards.map((c) => {
+                  const on = selected.has(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => toggleSelect(c.id)}
+                      className={`flex items-center justify-between gap-3 px-4 py-3 text-left transition ${
+                        on
+                          ? "bg-black text-white dark:bg-white dark:text-black"
+                          : "bg-white hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
+                      }`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">
+                          {c.title}
+                        </span>
+                        <span
+                          className={`block truncate text-[11px] ${
+                            on ? "text-zinc-300 dark:text-zinc-600" : "text-zinc-500"
+                          }`}
+                        >
+                          {c.grade ? `${c.grade} · ` : ""}
+                          {c.serial}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-sm tabular-nums">
+                        {formatMoneyCents(c.fmvCents)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {tradeError && (
+                <p className="border-l-2 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  {tradeError}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm">
+                  <span className="text-zinc-500">
+                    {selected.size} selected ·{" "}
+                  </span>
+                  <span className="tabular-nums">
+                    {formatMoneyCents(selectedSumCents)}
+                  </span>
+                  {selected.size >= 2 && (
+                    <span className="text-zinc-500">
+                      {" "}
+                      → trade value{" "}
+                      <span className="font-semibold tabular-nums text-black dark:text-white">
+                        {formatMoneyCents(estTradeCents)}
+                      </span>
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={selected.size < 2 || isTrading || paused}
+                  onClick={tradeUp}
+                  className="rounded-none bg-black px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 active:scale-[0.97] disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                >
+                  {isTrading ? "Trading…" : "Trade up"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </details>
+
       <details className="border border-black/10 dark:border-white/15">
         <summary className="cursor-pointer list-none px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400 transition hover:text-black dark:hover:text-white">
           Play settings
@@ -650,6 +798,57 @@ export function BuyClient({
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {tradeResult && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => {
+            setTradeResult(null);
+            router.refresh();
+          }}
+        >
+          <div
+            className="w-full max-w-sm overflow-hidden border border-white/15 bg-black p-8 text-center text-white animate-[fadeIn_300ms_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-300">
+              Traded up
+            </p>
+            <h3 className="mt-4 text-lg font-semibold">{tradeResult.title}</h3>
+            <p className="mt-1 font-mono text-xs text-zinc-400">
+              {tradeResult.serial}
+            </p>
+            {tradeResult.grade && (
+              <p className="mt-1 text-sm text-zinc-300">{tradeResult.grade}</p>
+            )}
+            <p className="mt-5 text-4xl font-semibold tabular-nums">
+              {formatMoneyCents(tradeResult.fmvCents)}
+            </p>
+            <p className="mt-1 text-xs uppercase tracking-[0.15em] text-zinc-400">
+              {tradeResult.tradedCount} cards in ·{" "}
+              {formatMoneyCents(tradeResult.inputCents)}
+            </p>
+            <div className="mt-7 flex gap-3">
+              <a
+                href={`/dashboard/cards/${tradeResult.cardId}`}
+                className="flex-1 rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200"
+              >
+                View card
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setTradeResult(null);
+                  router.refresh();
+                }}
+                className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
