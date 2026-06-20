@@ -97,7 +97,7 @@ export default async function BuyPage() {
 
   // Rewards reset on a rolling 24h cooldown (closes the midnight double-claim).
   const COOLDOWN_MS = 24 * 60 * 60 * 1000;
-  const nowMs = Date.now();
+  const nowMs = new Date().getTime();
   const checkinClaimable =
     !profile?.last_checkin_at ||
     nowMs - new Date(profile.last_checkin_at).getTime() >= COOLDOWN_MS;
