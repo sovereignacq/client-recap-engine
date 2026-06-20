@@ -122,10 +122,10 @@ export default async function DashboardPage({
           </Link>
           <Link
             href="/dashboard/buy"
-            className="flex items-center justify-between bg-black px-6 py-5 text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            className="flex items-center justify-between bg-black px-6 py-5 text-white transition hover:bg-zinc-800 active:scale-[0.99] dark:bg-white dark:text-black dark:hover:bg-zinc-200"
           >
-            <span className="text-sm font-medium uppercase tracking-[0.18em]">
-              Buy a pack
+            <span className="text-sm font-bold uppercase tracking-[0.18em]">
+              Apex Play
             </span>
             <span aria-hidden className="text-lg">→</span>
           </Link>

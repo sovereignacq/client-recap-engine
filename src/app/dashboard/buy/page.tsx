@@ -135,10 +135,12 @@ export default async function BuyPage() {
           >
             ← My collection
           </Link>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Buy</h1>
+          <h1 className="mt-2 text-3xl font-bold uppercase tracking-[0.1em]">
+            Apex Play
+          </h1>
           <p className="mt-1 text-sm text-zinc-500">
             Pick a tier, open a pack, get one random card. You might land below,
-            around, or above what you paid — the odds are listed on each tier.
+            around, or above what you paid — the odds are on every tier. Play for fun.
           </p>
         </header>
 
