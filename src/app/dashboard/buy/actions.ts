@@ -33,6 +33,7 @@ const BUYBACK_PCT = 0.8;
 export async function openPackAction(
   tierKey: string,
   mode: string,
+  category: string,
 ): Promise<OpenResult> {
   const supabase = await createClient();
   const {
@@ -43,11 +44,14 @@ export async function openPackAction(
   const { data, error } = await supabase.rpc("open_pack", {
     p_tier: tierKey,
     p_mode: mode,
+    p_category: category,
   });
   if (error) {
     const msg = /insufficient funds/i.test(error.message)
       ? "Not enough funds — add to your wallet to keep opening."
-      : error.message;
+      : /coming soon/i.test(error.message)
+        ? "That category isn't live yet."
+        : error.message;
     return { ok: false, error: msg };
   }
 

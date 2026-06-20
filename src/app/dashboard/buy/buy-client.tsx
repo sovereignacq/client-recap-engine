@@ -31,6 +31,12 @@ export type Mode = {
   priceMult: number;
   weightMults: Record<string, number>;
 };
+export type Category = {
+  key: string;
+  name: string;
+  active: boolean;
+  priceMult: number;
+};
 
 const OUTCOME_LABEL: Record<string, string> = {
   below: "Below",
@@ -49,6 +55,8 @@ type Won = Extract<OpenResult, { ok: true }>;
 export function BuyClient({
   tiers,
   modes,
+  categories,
+  activeCategory,
   poolAvailable,
   balance: initialBalance,
   pityByTier: initialPity,
@@ -57,6 +65,8 @@ export function BuyClient({
 }: {
   tiers: Tier[];
   modes: Mode[];
+  categories: Category[];
+  activeCategory: string;
   poolAvailable: boolean;
   balance: number;
   pityByTier: Record<string, number>;
@@ -113,15 +123,22 @@ export function BuyClient({
     [modes, modeKey],
   );
 
+  const [categoryKey, setCategoryKey] = useState(activeCategory);
+  const category = useMemo(
+    () => categories.find((c) => c.key === categoryKey),
+    [categories, categoryKey],
+  );
+  const catMult = category?.priceMult ?? 1;
+
   const open = (tier: Tier) => {
     setError(null);
     setOpeningKey(tier.key);
     startOpen(async () => {
-      const r = await openPackAction(tier.key, modeKey);
+      const r = await openPackAction(tier.key, modeKey, categoryKey);
       setOpeningKey(null);
       if (r.ok) {
         setBalance(r.balanceAfter);
-        setPity((p) => ({ ...p, [tier.key]: r.pityCount }));
+        setPity((p) => ({ ...p, [`${categoryKey}:${tier.key}`]: r.pityCount }));
         setSold(false);
         setPhase("charging");
         setDisplayCents(0);
@@ -171,6 +188,37 @@ export function BuyClient({
 
   return (
     <section className="space-y-5">
+      {/* Category columns */}
+      <div className="grid grid-cols-2 gap-px border border-black/10 bg-black/10 sm:grid-cols-3 lg:grid-cols-6 dark:border-white/15 dark:bg-white/15">
+        {categories.map((c) => {
+          const selected = c.key === categoryKey;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              disabled={!c.active}
+              onClick={() => c.active && setCategoryKey(c.key)}
+              className={`flex flex-col items-center gap-1 px-3 py-4 text-center transition ${
+                selected
+                  ? "bg-black text-white dark:bg-white dark:text-black"
+                  : c.active
+                    ? "bg-white hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
+                    : "bg-white text-zinc-400 dark:bg-black dark:text-zinc-600"
+              }`}
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">
+                {c.name}
+              </span>
+              {!c.active && (
+                <span className="text-[9px] uppercase tracking-[0.15em] text-zinc-400">
+                  Coming soon
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Wallet */}
       <div className="flex flex-wrap items-center justify-between gap-3 border border-black/10 px-5 py-4 dark:border-white/15">
         <div>
@@ -254,7 +302,7 @@ export function BuyClient({
       <div className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-2 lg:grid-cols-3 dark:border-white/15 dark:bg-white/15">
         {tiers.map((t) => {
           const priceMult = mode?.priceMult ?? 1;
-          const effPrice = Math.round(t.priceCents * priceMult);
+          const effPrice = Math.round(t.priceCents * catMult * priceMult);
           const adj = t.odds.map((b) => ({
             ...b,
             w: b.weight * (mode?.weightMults?.[b.key] ?? 1),
@@ -262,7 +310,7 @@ export function BuyClient({
           const total = adj.reduce((s, b) => s + b.w, 0) || 1;
           const minCents = Math.round(Math.min(...t.odds.map((b) => b.min_mult)) * effPrice);
           const maxCents = Math.round(Math.max(...t.odds.map((b) => b.max_mult)) * effPrice);
-          const pityCount = pity[t.key] ?? 0;
+          const pityCount = pity[`${categoryKey}:${t.key}`] ?? 0;
           const pityPct = Math.min(100, (pityCount / t.pityThreshold) * 100);
           const canAfford = balance >= effPrice;
           return (

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoneyCents } from "@/lib/cards";
-import { BuyClient, type Tier, type Mode } from "./buy-client";
+import { BuyClient, type Tier, type Mode, type Category } from "./buy-client";
 
 export const maxDuration = 30;
 
@@ -50,9 +50,23 @@ export default async function BuyPage() {
     weightMults: (m.weight_mults as Record<string, number>) ?? {},
   }));
 
-  // Pool size via a definer function so customers (who can't read house
-  // inventory rows directly) still know whether packs are stocked.
-  const { data: poolCount } = await supabase.rpc("pack_pool_count");
+  const { data: catRows } = await supabase
+    .from("pack_categories")
+    .select("key, name, active, price_mult")
+    .order("sort_order", { ascending: true });
+  const categories: Category[] = (catRows ?? []).map((c) => ({
+    key: c.key,
+    name: c.name,
+    active: c.active,
+    priceMult: Number(c.price_mult),
+  }));
+  const activeCategory = categories.find((c) => c.active)?.key ?? "pokemon";
+
+  // Pool size for the active category via a definer function (customers can't
+  // read house inventory rows directly).
+  const { data: poolCount } = await supabase.rpc("pack_pool_count", {
+    p_category: activeCategory,
+  });
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -74,11 +88,11 @@ export default async function BuyPage() {
 
   const { data: pityRows } = await supabase
     .from("pack_pity")
-    .select("tier_key, count")
+    .select("tier_key, category_key, count")
     .eq("buyer_id", user.id);
   const pityByTier: Record<string, number> = {};
   (pityRows ?? []).forEach((p) => {
-    pityByTier[p.tier_key] = p.count;
+    pityByTier[`${p.category_key}:${p.tier_key}`] = p.count;
   });
 
   const { data: openings } = await supabase
@@ -122,6 +136,8 @@ export default async function BuyPage() {
         <BuyClient
           tiers={tiers}
           modes={modes}
+          categories={categories}
+          activeCategory={activeCategory}
           poolAvailable={((poolCount as number) ?? 0) > 0}
           balance={balance}
           pityByTier={pityByTier}
