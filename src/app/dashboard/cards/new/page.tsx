@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isAIConfigured } from "@/lib/ai/client";
+import { getRole, isStaff } from "@/lib/roles";
 import { NewCardForm } from "./new-card-form";
 
 // Identification (photo upload + vision) can run well past the default
@@ -57,6 +58,7 @@ export default async function NewCardPage({
           defaultSubmitterId={submitter ?? null}
           aiConfigured={isAIConfigured()}
           userId={user.id}
+          staff={isStaff(await getRole())}
         />
       </div>
     </main>

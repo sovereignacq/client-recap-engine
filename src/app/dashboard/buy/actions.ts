@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { cardTitle } from "@/lib/cards";
+import { getStripe } from "@/lib/stripe/server";
+
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ?? "https://client-recap-engine.vercel.app";
 
 export type OpenResult =
   | {
@@ -98,11 +102,58 @@ export async function openPackAction(
   };
 }
 
+export type DepositResult = { ok: true; url: string } | { ok: false; error: string };
+
+/** Real money: start a Stripe Checkout session to fund the wallet. */
+export async function createDepositCheckoutAction(
+  amountCents: number,
+): Promise<DepositResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  if (!Number.isFinite(amountCents) || amountCents < 100 || amountCents > 1000000) {
+    return { ok: false, error: "Choose a valid amount." };
+  }
+
+  let stripe: ReturnType<typeof getStripe>;
+  try {
+    stripe = getStripe();
+  } catch {
+    return { ok: false, error: "Payments aren't configured yet (no Stripe key)." };
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: { name: "APEX TCG wallet deposit" },
+            unit_amount: Math.round(amountCents),
+          },
+          quantity: 1,
+        },
+      ],
+      client_reference_id: user.id,
+      metadata: { supabase_user_id: user.id, kind: "wallet_topup" },
+      success_url: `${APP_URL}/dashboard/buy?deposit=success`,
+      cancel_url: `${APP_URL}/dashboard/buy?deposit=cancel`,
+    });
+    if (!session.url) return { ok: false, error: "Could not start checkout." };
+    return { ok: true, url: session.url };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Checkout failed." };
+  }
+}
+
 export type TopUpResult =
   | { ok: true; balance: number }
   | { ok: false; error: string };
 
-/** Records-first wallet top-up. Stripe will replace the funding source later. */
+/** Staff-only free test credit (the DB function enforces the staff check). */
 export async function topUpAction(amountCents: number): Promise<TopUpResult> {
   const supabase = await createClient();
   const {

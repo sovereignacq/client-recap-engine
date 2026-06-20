@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { cardTitle, formatMoneyCents } from "@/lib/cards";
 import { InventoryToggle } from "./inventory-toggle";
@@ -63,13 +64,21 @@ export default async function AdminInventoryPage() {
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-12">
       <div className="w-full max-w-3xl space-y-10">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Pack inventory</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Cards in the pool can be won from packs. Cards you buy from customers
-            land here automatically; add your own stock below. Only cards with an
-            FMV can be packed.
-          </p>
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Pack inventory</h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              Cards in the pool can be won from packs. Cards you buy from
+              customers land here automatically; add your own stock below. Only
+              cards with an FMV can be packed.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/cards/new"
+            className="shrink-0 rounded-none bg-black px-5 py-3 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 active:scale-[0.97] dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            + Add a card
+          </Link>
         </div>
 
         <section className="space-y-3">

@@ -52,6 +52,23 @@ export async function POST(request: Request) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        // Wallet deposit (one-time payment) — credit the wallet.
+        if (session.metadata?.kind === "wallet_topup") {
+          const uid =
+            (session.metadata?.supabase_user_id as string | undefined) ??
+            session.client_reference_id ??
+            undefined;
+          const amount = session.amount_total ?? 0;
+          if (uid && amount > 0) {
+            await admin.rpc("wallet_credit_external", {
+              p_user: uid,
+              p_amount_cents: amount,
+            });
+          }
+          break;
+        }
+
         const subscriptionId =
           typeof session.subscription === "string"
             ? session.subscription

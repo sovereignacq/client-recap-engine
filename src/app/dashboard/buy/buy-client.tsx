@@ -8,6 +8,7 @@ import {
   topUpAction,
   sellBackAction,
   claimDailyAction,
+  createDepositCheckoutAction,
   type OpenResult,
 } from "./actions";
 
@@ -62,6 +63,7 @@ export function BuyClient({
   pityByTier: initialPity,
   dailyClaimable: initialDailyClaimable,
   dailyStreak: initialStreak,
+  staff,
 }: {
   tiers: Tier[];
   modes: Mode[];
@@ -72,6 +74,7 @@ export function BuyClient({
   pityByTier: Record<string, number>;
   dailyClaimable: boolean;
   dailyStreak: number;
+  staff: boolean;
 }) {
   const router = useRouter();
   const [isOpening, startOpen] = useTransition();
@@ -152,6 +155,15 @@ export function BuyClient({
   const addFunds = (cents: number) => {
     setError(null);
     startFund(async () => {
+      const r = await createDepositCheckoutAction(cents);
+      if (r.ok) window.location.href = r.url;
+      else setError(r.error);
+    });
+  };
+
+  const testCredit = (cents: number) => {
+    setError(null);
+    startFund(async () => {
       const r = await topUpAction(cents);
       if (r.ok) setBalance(r.balance);
       else setError(r.error);
@@ -198,12 +210,12 @@ export function BuyClient({
               type="button"
               disabled={!c.active}
               onClick={() => c.active && setCategoryKey(c.key)}
-              className={`flex flex-col items-center gap-1 px-3 py-4 text-center transition ${
+              className={`flex flex-col items-center gap-1 px-3 py-4 text-center transition active:scale-[0.98] ${
                 selected
                   ? "bg-black text-white dark:bg-white dark:text-black"
                   : c.active
                     ? "bg-white hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
-                    : "bg-white text-zinc-400 dark:bg-black dark:text-zinc-600"
+                    : "cursor-not-allowed bg-white text-zinc-400 dark:bg-black dark:text-zinc-600"
               }`}
             >
               <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">
@@ -229,16 +241,14 @@ export function BuyClient({
             {formatMoneyCents(balance)}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             disabled={isClaiming || !daily.claimable}
             onClick={claimDaily}
-            className="rounded-none bg-black px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            className="rounded-none bg-black px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
           >
-            {daily.claimable
-              ? "Claim daily"
-              : `Daily claimed · ${daily.streak}🔥`}
+            {daily.claimable ? "Claim daily" : `Daily · ${daily.streak}🔥`}
           </button>
           {TOPUP_PRESETS.map((c) => (
             <button
@@ -246,13 +256,31 @@ export function BuyClient({
               type="button"
               disabled={isFunding}
               onClick={() => addFunds(c)}
-              className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
+              className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 active:scale-95 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
             >
-              + {formatMoneyCents(c)}
+              Add {formatMoneyCents(c)}
             </button>
           ))}
         </div>
       </div>
+      {staff && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">
+            Test credit
+          </span>
+          {TOPUP_PRESETS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              disabled={isFunding}
+              onClick={() => testCredit(c)}
+              className="rounded-none border border-dashed border-black/20 px-2.5 py-1 text-[11px] tabular-nums transition hover:bg-black/5 active:scale-95 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
+            >
+              +{formatMoneyCents(c)}
+            </button>
+          ))}
+        </div>
+      )}
       {dailyMsg && (
         <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
           {dailyMsg}
@@ -314,7 +342,10 @@ export function BuyClient({
           const pityPct = Math.min(100, (pityCount / t.pityThreshold) * 100);
           const canAfford = balance >= effPrice;
           return (
-            <div key={t.key} className="flex flex-col bg-white p-6 dark:bg-black">
+            <div
+              key={t.key}
+              className="flex flex-col bg-white p-6 transition-colors hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
+            >
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
                 {t.name}
               </p>
@@ -353,7 +384,7 @@ export function BuyClient({
                 type="button"
                 onClick={() => open(t)}
                 disabled={!poolAvailable || isOpening || !canAfford}
-                className="mt-5 rounded-none bg-black px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                className="mt-5 rounded-none bg-black px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 active:scale-[0.97] disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
               >
                 {openingKey === t.key
                   ? "Opening…"

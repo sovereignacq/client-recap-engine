@@ -71,11 +71,13 @@ export function NewCardForm({
   defaultSubmitterId,
   aiConfigured,
   userId,
+  staff,
 }: {
   submitters: Submitter[];
   defaultSubmitterId: string | null;
   aiConfigured: boolean;
   userId: string;
+  staff: boolean;
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<"upload" | "details">("upload");
@@ -114,6 +116,7 @@ export function NewCardForm({
   // Workflow / record
   const [submitterId, setSubmitterId] = useState(defaultSubmitterId ?? "");
   const [intent, setIntent] = useState("grade");
+  const [stockInPool, setStockInPool] = useState(false);
 
   const setIdField = (k: keyof Identification, v: string) =>
     setId((prev) => ({ ...prev, [k]: v }));
@@ -251,6 +254,7 @@ export function NewCardForm({
     fd.set("card_number", id.cardNumber);
     fd.set("variant", id.variant);
     fd.set("intent", intent);
+    if (stockInPool) fd.set("in_inventory", "1");
     fd.set("submitter_id", submitterId);
     fd.set("fmv", fmv);
     fd.set("fmv_notes", fmvNotes);
@@ -601,6 +605,22 @@ export function NewCardForm({
             </p>
           </div>
         </div>
+        {staff && (
+          <label className="flex items-start gap-3 border border-black/15 px-4 py-3 text-sm dark:border-white/20">
+            <input
+              type="checkbox"
+              checked={stockInPool}
+              onChange={(e) => setStockInPool(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              Stock this card in the pack pool (house inventory)
+              <span className="block text-xs text-zinc-500">
+                It becomes winnable from packs in its category. Needs an FMV.
+              </span>
+            </span>
+          </label>
+        )}
         <p className="text-[11px] text-zinc-400">
           Status is tracked automatically — newly graded cards start as “Graded,”
           others as “Received.”

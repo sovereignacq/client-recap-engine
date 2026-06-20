@@ -11,6 +11,7 @@ import {
   type GradeResult,
 } from "@/lib/ai/client";
 import { lookupPokemonCard } from "@/lib/pokemon";
+import { getRole, isStaff } from "@/lib/roles";
 
 const BUCKET = "card-images";
 
@@ -349,9 +350,13 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
   }
   const autoGradeLabel = String(formData.get("auto_grade_label") ?? "").trim() || null;
 
-  // Status is automatic, not picked by the user: a freshly graded card starts
-  // "graded", otherwise "received".
-  const status = gradeReport ? "graded" : "received";
+  // Staff can stock a card straight into the house pack pool.
+  const wantsInventory = String(formData.get("in_inventory") ?? "") === "1";
+  const stockInPool = wantsInventory && isStaff(await getRole());
+
+  // Status is automatic, not picked by the user: pooled stock is "inventory",
+  // a freshly graded card starts "graded", otherwise "received".
+  const status = stockInPool ? "inventory" : gradeReport ? "graded" : "received";
 
   const { data, error } = await supabase
     .from("cards")
@@ -382,6 +387,7 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
       fmv_notes: String(formData.get("fmv_notes") ?? "").trim() || null,
       intent,
       status,
+      in_inventory: stockInPool,
       image_path: String(formData.get("image_path") ?? "").trim() || null,
       image_back_path:
         String(formData.get("image_back_path") ?? "").trim() || null,

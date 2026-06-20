@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoneyCents } from "@/lib/cards";
+import { getRole, isStaff } from "@/lib/roles";
 import { BuyClient, type Tier, type Mode, type Category } from "./buy-client";
 
 export const maxDuration = 30;
@@ -143,6 +144,7 @@ export default async function BuyPage() {
           pityByTier={pityByTier}
           dailyClaimable={dailyClaimable}
           dailyStreak={dailyStreak}
+          staff={isStaff(await getRole())}
         />
 
         {feed.length > 0 && (
