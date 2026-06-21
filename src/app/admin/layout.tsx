@@ -14,8 +14,8 @@ export default async function AdminLayout({
   return (
     <div className="flex flex-1 flex-col">
       <header className="sticky top-0 z-40 border-b border-black/10 bg-white/85 backdrop-blur dark:border-white/15 dark:bg-black/85">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <div className="flex items-baseline gap-3">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:h-16 sm:flex-nowrap sm:py-0 sm:px-6">
+          <div className="flex shrink-0 items-baseline gap-3">
             <Link href="/admin" className="text-base font-bold uppercase tracking-[0.25em]">
               APEX&nbsp;TCG
             </Link>
@@ -23,7 +23,7 @@ export default async function AdminLayout({
               Back office
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <NavMenu
               links={[{ label: "Overview", href: "/admin" }]}
               groups={[

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { cardTitle, formatMoneyCents } from "@/lib/cards";
 import { InventoryToggle } from "./inventory-toggle";
+import { PoolSearch } from "./pool-search";
 
 type CardRow = {
   id: string;
@@ -80,6 +81,8 @@ export default async function AdminInventoryPage() {
             + Add a card
           </Link>
         </div>
+
+        <PoolSearch />
 
         <section className="space-y-3">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
