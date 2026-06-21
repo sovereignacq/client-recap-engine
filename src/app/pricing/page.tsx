@@ -98,9 +98,9 @@ export default async function PricingPage() {
             Grade more, pay less.
           </h1>
           <p className="mx-auto max-w-xl text-zinc-600 dark:text-zinc-400">
-            Pick a membership the way you would with PSA or TAG — bundled grading
-            credits and a standing discount. It only ever trims our service fee,
-            never the grading company&apos;s cost.
+            Pick a membership the way you would at any major grading company —
+            bundled grading credits and a standing discount. It only ever trims
+            our service fee, never the grading company&apos;s cost.
           </p>
         </header>
 
@@ -195,7 +195,7 @@ export default async function PricingPage() {
               </span>
             </div>
             <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-              When you submit a card to PSA, TAG, or another grading company
+              When you submit a card to any major grading company
               through APEX, you pay their grading fee and insured shipping
               <strong className="font-semibold"> at cost</strong>. APEX adds one
               flat service fee, by the card&apos;s declared value — that&apos;s
