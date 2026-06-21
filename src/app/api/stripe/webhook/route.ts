@@ -173,7 +173,13 @@ async function upsertSubscription(
 ) {
   const item = sub.items.data[0];
   const priceId = item?.price.id ?? null;
-  const plan = planKeyForPrice(priceId);
+  // pro_* plans map from env; membership plans (collector/dealer) carry their
+  // key in the Stripe price metadata.
+  const plan =
+    planKeyForPrice(priceId) ??
+    (typeof item?.price?.metadata?.plan === "string"
+      ? item.price.metadata.plan
+      : null);
 
   // Stripe puts current period on the subscription item in newer API versions.
   const periodStart = item?.current_period_start ?? null;

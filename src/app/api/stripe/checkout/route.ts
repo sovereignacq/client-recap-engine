@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getStripe, getPrices, isValidPlanKey } from "@/lib/stripe/server";
+import {
+  getStripe,
+  getPrices,
+  isCheckoutPlan,
+  isMembershipKey,
+} from "@/lib/stripe/server";
 
 export const runtime = "nodejs";
 
@@ -30,23 +35,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!isValidPlanKey(plan)) {
+  if (!isCheckoutPlan(plan)) {
     return NextResponse.json(
-      { error: "Invalid plan. Use pro_monthly or pro_annual." },
+      { error: "Invalid plan." },
       { status: 400 },
     );
   }
 
-  const priceId = getPrices()[plan];
+  // Look up existing Stripe customer for this user.
+  const admin = createAdminClient();
+
+  // Memberships (collector/dealer) keep their Stripe price IDs in the DB and
+  // bill annually with no trial; pro_* plans come from env and include a trial.
+  let priceId: string | null = null;
+  const isMembership = isMembershipKey(plan);
+  if (isMembershipKey(plan)) {
+    const { data: mp } = await admin
+      .from("membership_plans")
+      .select("price_id")
+      .eq("key", plan)
+      .maybeSingle();
+    priceId = mp?.price_id ?? null;
+  } else {
+    priceId = getPrices()[plan] || null;
+  }
   if (!priceId) {
     return NextResponse.json(
       { error: `Price not configured for plan: ${plan}` },
       { status: 500 },
     );
   }
-
-  // Look up existing Stripe customer for this user.
-  const admin = createAdminClient();
   const { data: profile } = await admin
     .from("profiles")
     .select("stripe_customer_id, email")
@@ -78,7 +96,7 @@ export async function POST(request: Request) {
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
     subscription_data: {
-      trial_period_days: 14,
+      ...(isMembership ? {} : { trial_period_days: 14 }),
       metadata: { supabase_user_id: user.id, plan },
     },
     allow_promotion_codes: true,

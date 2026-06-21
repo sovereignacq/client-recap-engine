@@ -65,7 +65,11 @@ export default async function DashboardPage({
       ? "Pro (annual)"
       : subscription.plan === "pro_monthly"
         ? "Pro (monthly)"
-        : "Pro"
+        : subscription.plan === "collector"
+          ? "Collector"
+          : subscription.plan === "dealer"
+            ? "Dealer"
+            : "Member"
     : "Free";
 
   return (

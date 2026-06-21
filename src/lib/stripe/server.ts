@@ -38,8 +38,20 @@ export function getPrices() {
 
 export type PlanKey = "pro_monthly" | "pro_annual";
 
+/** Membership plans whose Stripe price IDs live in the DB (membership_plans). */
+export type MembershipKey = "collector" | "dealer";
+export type CheckoutPlan = PlanKey | MembershipKey;
+
 export function isValidPlanKey(value: unknown): value is PlanKey {
   return value === "pro_monthly" || value === "pro_annual";
+}
+
+export function isMembershipKey(value: unknown): value is MembershipKey {
+  return value === "collector" || value === "dealer";
+}
+
+export function isCheckoutPlan(value: unknown): value is CheckoutPlan {
+  return isValidPlanKey(value) || isMembershipKey(value);
 }
 
 /**

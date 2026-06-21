@@ -84,6 +84,9 @@ export default async function CardDetailPage({
     .select("key, name, turnaround_days")
     .eq("accepting", true)
     .order("sort_order", { ascending: true });
+  const { data: memberDiscount } = await supabase.rpc(
+    "current_member_discount_pct",
+  );
 
   // Intake cards only (game pulls have status 'won'); not already in transit.
   const gradable = !["won", "grading", "shipping", "shipped", "sold"].includes(
@@ -227,6 +230,7 @@ export default async function CardDetailPage({
               cardId={card.id}
               fmvCents={card.fmv_cents}
               companies={openGraders ?? []}
+              discountPct={(memberDiscount as number) ?? 0}
             />
           ) : (
             <p className="text-sm text-zinc-500">
