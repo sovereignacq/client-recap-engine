@@ -16,6 +16,15 @@ import {
 
 export const maxDuration = 30;
 
+/** Privacy: show only the first 2 letters of a pull handle, mask the rest. */
+function maskHandle(name: string): string {
+  const n = (name ?? "").trim();
+  if (!n) return "Someone";
+  const keep = n.slice(0, 2);
+  const masked = "•".repeat(Math.max(2, n.length - keep.length));
+  return keep + masked;
+}
+
 type OpeningRow = {
   id: string;
   tier_key: string;
@@ -293,7 +302,7 @@ export default async function BuyPage() {
                     className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm"
                   >
                     <span className="min-w-0 truncate">
-                      <span className="font-medium">{f.handle}</span>
+                      <span className="font-medium">{maskHandle(f.handle)}</span>
                       <span className="text-zinc-500">
                         {" "}
                         pulled {tierName.get(f.tier_key) ?? f.tier_key}

@@ -8,6 +8,7 @@ import {
   adminSetRole,
   adminDeleteUser,
   adminRestoreUser,
+  adminRecommendDeletion,
 } from "@/app/admin/actions";
 
 const PANEL = "border border-black/10 p-5 dark:border-white/15";
@@ -283,7 +284,7 @@ export function UserControls({
             >
               Restore account
             </button>
-          ) : (
+          ) : isOwner ? (
             <button
               type="button"
               disabled={pending}
@@ -306,6 +307,24 @@ export function UserControls({
               className="w-full rounded-none border border-red-500/40 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-red-600 transition hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
             >
               Delete account
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  const res = await adminRecommendDeletion(userId);
+                  setRoleMsg(
+                    res?.error
+                      ? { ok: false, text: res.error }
+                      : { ok: true, text: "Flagged for the owner to review." },
+                  );
+                })
+              }
+              className="w-full rounded-none border border-amber-500/40 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-amber-700 transition hover:bg-amber-500/10 disabled:opacity-50 dark:text-amber-300"
+            >
+              Recommend deletion
             </button>
           )}
           <Msg m={roleMsg} />

@@ -17,7 +17,7 @@ export default async function AdminUserDetailPage({
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "id, email, full_name, role, balance_cents, withdrawable_cents, created_at, suspended_at, suspended_reason, deleted_at",
+      "id, email, full_name, role, balance_cents, withdrawable_cents, created_at, suspended_at, suspended_reason, deleted_at, deletion_recommended_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -71,6 +71,11 @@ export default async function AdminUserDetailPage({
             {profile.deleted_at && (
               <span className="border border-red-500/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-red-600 dark:text-red-400">
                 Deleted
+              </span>
+            )}
+            {!profile.deleted_at && profile.deletion_recommended_at && (
+              <span className="border border-amber-500/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-amber-600 dark:text-amber-400">
+                Deletion recommended
               </span>
             )}
           </div>

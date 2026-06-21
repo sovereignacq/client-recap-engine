@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRole, isStaff } from "@/lib/roles";
-import { searchPokemonCards, type PokemonSearchResult } from "@/lib/pokemon";
+import { type PokemonSearchResult } from "@/lib/pokemon";
+import { searchTcgdexEn, tcgdexDetail } from "@/lib/tcgdex";
 
 export type PoolSearchResult =
   | { ok: true; results: PokemonSearchResult[] }
@@ -22,38 +23,41 @@ export async function searchPoolCardsAction(
   const { data, error } = await supabase.rpc("search_pokemon_catalog", {
     p_q: q,
   });
-  if (!error && Array.isArray(data) && data.length > 0) {
-    const results: PokemonSearchResult[] = data.map(
-      (c: {
-        id: string;
-        name: string;
-        set_name: string | null;
-        number: string | null;
-        rarity: string | null;
-        image_url: string | null;
-        market_cents: number | null;
-        language: string | null;
-      }) => ({
-        id: c.id,
-        name: c.name,
-        setName: c.set_name ?? "",
-        number: c.number ?? "",
-        rarity: c.rarity ?? "",
-        imageUrl: c.image_url,
-        marketPriceCents: c.market_cents,
-        language: c.language ?? "en",
-      }),
-    );
-    return { ok: true, results };
-  }
+  const local: PokemonSearchResult[] =
+    !error && Array.isArray(data)
+      ? data.map(
+          (c: {
+            id: string;
+            name: string;
+            set_name: string | null;
+            number: string | null;
+            rarity: string | null;
+            image_url: string | null;
+            market_cents: number | null;
+            language: string | null;
+          }) => ({
+            id: c.id,
+            name: c.name,
+            setName: c.set_name ?? "",
+            number: c.number ?? "",
+            rarity: c.rarity ?? "",
+            imageUrl: c.image_url,
+            marketPriceCents: c.market_cents,
+            language: c.language ?? "en",
+          }),
+        )
+      : [];
 
-  // Fallback: live database lookup if the catalog has no hit yet.
-  try {
-    const results = await searchPokemonCards(q);
-    return { ok: true, results };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Search failed." };
-  }
+  // Supplement sparse local results with a live TCGdex lookup — it carries the
+  // newest sets the local catalog may be missing (e.g. recent trainers).
+  if (local.length >= 8) return { ok: true, results: local };
+  const tg = await searchTcgdexEn(q);
+  const seen = new Set(local.map((r) => `${r.name}|${r.number}`));
+  const merged = [
+    ...local,
+    ...tg.filter((r) => !seen.has(`${r.name}|${r.number}`)),
+  ].slice(0, 40);
+  return { ok: true, results: merged };
 }
 
 export type AddPoolResult =
@@ -76,19 +80,29 @@ export async function addPoolCardFromSearchAction(
     return { ok: false, error: "No house owner configured." };
   }
 
-  const fmvCents =
+  let fmvCents =
     typeof card.marketPriceCents === "number" && card.marketPriceCents > 0
       ? card.marketPriceCents
       : null;
+  let setName = card.setName;
+  let rarity = card.rarity;
+
+  // Live TCGdex cards arrive without price/set/rarity — fetch the detail now.
+  if (card.id.startsWith("tg:")) {
+    const det = await tcgdexDetail(card.id.slice(3));
+    if (fmvCents == null) fmvCents = det.priceCents;
+    setName = setName || det.setName;
+    rarity = rarity || det.rarity;
+  }
 
   const { error } = await supabase.from("cards").insert({
     owner_id: ownerUuid,
     category: "tcg",
     sport_or_game: "Pokémon",
     player_or_character: card.name,
-    set_name: card.setName || null,
+    set_name: setName || null,
     card_number: card.number || null,
-    variant: card.rarity || null,
+    variant: rarity || null,
     id_status: "confirmed",
     id_model: "pokemontcg.io",
     fmv_cents: fmvCents,

@@ -52,6 +52,7 @@ export default async function DashboardLayout({
                   label: "Collection",
                   items: [
                     { label: "My cards", href: "/dashboard/cards" },
+                    { label: "My collections", href: "/dashboard/collections" },
                     { label: "Submitters", href: "/dashboard/submitters" },
                   ],
                 },
