@@ -53,9 +53,18 @@ export function PackWheel({
   function stop() {
     const strip = stripRef.current;
     if (!strip) return;
-    const m = new DOMMatrixReadOnly(getComputedStyle(strip).transform);
+    const t = getComputedStyle(strip).transform;
+    // Safari/Firefox throw on DOMMatrix("none"); fall back to current offset.
+    let current = offset;
+    if (t && t !== "none") {
+      try {
+        current = new DOMMatrixReadOnly(t).m41;
+      } catch {
+        current = offset;
+      }
+    }
     setTransition("none");
-    setOffset(m.m41);
+    setOffset(current);
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         setTransition("transform 1.15s cubic-bezier(0.18,0.85,0.2,1)");

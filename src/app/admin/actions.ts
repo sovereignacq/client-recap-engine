@@ -234,9 +234,23 @@ export async function adminSetRole(
 export async function adminDeleteUser(
   userId: string,
 ): Promise<{ error?: string } | void> {
-  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  if ((await getRole()) !== "owner") return { error: "Only the owner can delete accounts." };
   const supabase = await createClient();
   const { error } = await supabase.rpc("admin_delete_user", { p_user: userId });
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+}
+
+/** Staff flag an account for the owner to review for deletion. */
+export async function adminRecommendDeletion(
+  userId: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_recommend_deletion", {
+    p_user: userId,
+  });
   if (error) return { error: error.message };
   revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");

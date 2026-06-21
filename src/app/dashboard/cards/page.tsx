@@ -41,12 +41,15 @@ export default async function CardsListPage() {
     )
     .eq("owner_id", user.id)
     .is("archived_at", null)
+    .eq("in_inventory", false) // exclude house pool stock from a personal view
     .order("created_at", { ascending: false });
 
   const cards: CardRow[] = (data ?? []).map((c) => ({
     ...c,
     submitter: Array.isArray(c.submitter) ? (c.submitter[0] ?? null) : c.submitter,
   })) as CardRow[];
+
+  const totalCents = cards.reduce((s, c) => s + (c.fmv_cents ?? 0), 0);
 
   // Shipment status for any of these cards the user has asked us to mail.
   const { data: shipRows } = await supabase
@@ -78,7 +81,16 @@ export default async function CardsListPage() {
             </Link>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Cards</h1>
             <p className="mt-1 text-sm text-zinc-500">
-              Every submitted card, serialized and tracked from intake to payout.
+              Cards you pulled, intaked, or own — serialized and tracked.
+            </p>
+            <p className="mt-2 text-sm">
+              <span className="text-[11px] uppercase tracking-[0.15em] text-zinc-400">
+                Total value{" "}
+              </span>
+              <span className="font-semibold tabular-nums">
+                {formatMoneyCents(totalCents)}
+              </span>
+              <span className="text-zinc-500"> · {cards.length} card{cards.length === 1 ? "" : "s"}</span>
             </p>
           </div>
           <Link
