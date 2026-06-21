@@ -7,6 +7,7 @@ import {
   adminIssueWarning,
   adminSetRole,
   adminDeleteUser,
+  adminRestoreUser,
 } from "@/app/admin/actions";
 
 const PANEL = "border border-black/10 p-5 dark:border-white/15";
@@ -37,11 +38,13 @@ function Msg({ m }: { m: { ok: boolean; text: string } | null }) {
 export function UserControls({
   userId,
   suspended,
+  deleted,
   role,
   isOwner,
 }: {
   userId: string;
   suspended: boolean;
+  deleted: boolean;
   role: string;
   isOwner: boolean;
 }) {
@@ -262,29 +265,49 @@ export function UserControls({
             </p>
           )}
 
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              if (
-                !confirm(
-                  "Delete this account? The user will be suspended and removed from active views. An owner can restore it.",
+          {deleted ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  const res = await adminRestoreUser(userId);
+                  setRoleMsg(
+                    res?.error
+                      ? { ok: false, text: res.error }
+                      : { ok: true, text: "Account restored." },
+                  );
+                })
+              }
+              className="w-full rounded-none border border-emerald-500/40 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-emerald-700 transition hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-300"
+            >
+              Restore account
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                if (
+                  !confirm(
+                    "Delete this account? The user will be suspended and removed from active views. It can be restored later.",
+                  )
                 )
-              )
-                return;
-              startTransition(async () => {
-                const res = await adminDeleteUser(userId);
-                setRoleMsg(
-                  res?.error
-                    ? { ok: false, text: res.error }
-                    : { ok: true, text: "Account deleted." },
-                );
-              });
-            }}
-            className="w-full rounded-none border border-red-500/40 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-red-600 transition hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
-          >
-            Delete account
-          </button>
+                  return;
+                startTransition(async () => {
+                  const res = await adminDeleteUser(userId);
+                  setRoleMsg(
+                    res?.error
+                      ? { ok: false, text: res.error }
+                      : { ok: true, text: "Account deleted." },
+                  );
+                });
+              }}
+              className="w-full rounded-none border border-red-500/40 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-red-600 transition hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+            >
+              Delete account
+            </button>
+          )}
           <Msg m={roleMsg} />
         </div>
       </div>

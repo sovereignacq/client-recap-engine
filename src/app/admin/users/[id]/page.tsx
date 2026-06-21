@@ -96,6 +96,7 @@ export default async function AdminUserDetailPage({
         <UserControls
           userId={profile.id}
           suspended={suspended}
+          deleted={!!profile.deleted_at}
           role={profile.role}
           isOwner={isOwner}
         />
