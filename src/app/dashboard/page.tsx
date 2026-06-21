@@ -60,6 +60,13 @@ export default async function DashboardPage({
     .select("id", { count: "exact", head: true })
     .eq("owner_id", user.id);
 
+  const [{ data: gradingCredits }, { data: memberDiscount }] = await Promise.all([
+    supabase.rpc("available_grading_credits"),
+    supabase.rpc("current_member_discount_pct"),
+  ]);
+  const credits = (gradingCredits as number) ?? 0;
+  const discountPct = (memberDiscount as number) ?? 0;
+
   const planLabel = subscription
     ? subscription.plan === "pro_annual"
       ? "Pro (annual)"
@@ -169,6 +176,25 @@ export default async function DashboardPage({
                       : null}
                 </p>
               )}
+
+              {/* Membership perks */}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="border border-black/15 px-2.5 py-1 text-[11px] font-medium tabular-nums dark:border-white/20">
+                  {credits} grading credit{credits === 1 ? "" : "s"}
+                </span>
+                {discountPct > 0 && (
+                  <span className="border border-emerald-500/40 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                    {discountPct}% off grading
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-zinc-500">
+                {credits > 0
+                  ? "Each credit waives the service fee on a value-tier card (declared value up to $500) when you submit it for grading."
+                  : discountPct > 0
+                    ? "Your membership trims the APEX service fee on every grading submission."
+                    : "Collector & Dealer members earn annual grading credits and a standing discount."}
+              </p>
             </div>
             <div>
               {subscription && profile?.stripe_customer_id ? (
