@@ -25,6 +25,7 @@ export type OpenResult =
       pityCount: number;
       pityThreshold: number;
       buybackCents: number;
+      imageUrl: string | null;
     }
   | { ok: false; error: string };
 
@@ -78,7 +79,7 @@ export async function openPackAction(
   const { data: card } = await supabase
     .from("cards")
     .select(
-      "card_year, manufacturer, set_name, player_or_character, card_number, variant, auto_grade_label",
+      "card_year, manufacturer, set_name, player_or_character, card_number, variant, auto_grade_label, image_url",
     )
     .eq("id", d.card_id)
     .maybeSingle();
@@ -102,7 +103,18 @@ export async function openPackAction(
     pityCount: d.pity_count,
     pityThreshold: d.pity_threshold,
     buybackCents: Math.round(d.fmv_cents * BUYBACK_PCT),
+    imageUrl: (card as { image_url?: string | null } | null)?.image_url ?? null,
   };
+}
+
+/** Decoy card art for the wheel-of-fortune reel, within a tier's value band. */
+export async function packReelAction(tierKey: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("pack_reel_images", {
+    p_tier: tierKey,
+  });
+  if (error || !Array.isArray(data)) return [];
+  return (data as string[]).filter(Boolean);
 }
 
 export type PlayResult = { ok: true } | { ok: false; error: string };
@@ -311,7 +323,7 @@ export async function tradeUpAction(cardIds: string[]): Promise<TradeUpResult> {
   const { data: card } = await supabase
     .from("cards")
     .select(
-      "card_year, manufacturer, set_name, player_or_character, card_number, variant, auto_grade_label",
+      "card_year, manufacturer, set_name, player_or_character, card_number, variant, auto_grade_label, image_url",
     )
     .eq("id", d.card_id)
     .maybeSingle();
@@ -445,7 +457,7 @@ export async function redeemPackCreditAction(
   const { data: card } = await supabase
     .from("cards")
     .select(
-      "card_year, manufacturer, set_name, player_or_character, card_number, variant, auto_grade_label",
+      "card_year, manufacturer, set_name, player_or_character, card_number, variant, auto_grade_label, image_url",
     )
     .eq("id", d.card_id)
     .maybeSingle();

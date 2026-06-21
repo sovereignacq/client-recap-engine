@@ -32,6 +32,7 @@ export async function searchPoolCardsAction(
         rarity: string | null;
         image_url: string | null;
         market_cents: number | null;
+        language: string | null;
       }) => ({
         id: c.id,
         name: c.name,
@@ -40,6 +41,7 @@ export async function searchPoolCardsAction(
         rarity: c.rarity ?? "",
         imageUrl: c.image_url,
         marketPriceCents: c.market_cents,
+        language: c.language ?? "en",
       }),
     );
     return { ok: true, results };
