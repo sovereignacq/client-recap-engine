@@ -105,6 +105,11 @@ export function PoolSearch() {
                 <p className="truncate text-[10px] text-zinc-500">
                   {c.setName} · {c.number}
                 </p>
+                {c.rarity && (
+                  <span className="mt-0.5 inline-block max-w-full truncate border border-black/15 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.1em] text-zinc-500 dark:border-white/20">
+                    {c.rarity}
+                  </span>
+                )}
                 <p className="mt-0.5 text-xs font-semibold tabular-nums">
                   {c.marketPriceCents != null
                     ? formatMoneyCents(c.marketPriceCents)

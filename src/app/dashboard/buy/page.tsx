@@ -123,6 +123,14 @@ export default async function BuyPage() {
       .eq("status", "pending"),
   ]);
 
+  // Odds modes unlock only after the buyer's first completed withdrawal.
+  const { count: paidWithdrawals } = await supabase
+    .from("withdrawal_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("status", "paid");
+  const canChangeOdds = (paidWithdrawals ?? 0) > 0;
+
   // Unredeemed free-pack credits.
   const { data: creditRows } = await supabase
     .from("pack_credits")
@@ -226,6 +234,7 @@ export default async function BuyPage() {
         <BuyClient
           tiers={tiers}
           modes={modes}
+          canChangeOdds={canChangeOdds}
           categories={categories}
           activeCategory={activeCategory}
           poolAvailable={((poolCount as number) ?? 0) > 0}
