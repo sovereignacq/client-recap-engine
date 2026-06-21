@@ -9,9 +9,11 @@ import {
   CARD_STATUSES,
   CARD_INTENTS,
   ID_STATUSES,
+  GRADING_SUB_STATUSES,
 } from "@/lib/cards";
 import { CardEditForm } from "./card-edit-form";
 import { DeleteCardButton } from "./delete-button";
+import { SubmitGrading } from "./grade-submit";
 import { GradeReportView, type GradeReportData } from "../grade-report";
 
 export default async function CardDetailPage({
@@ -61,6 +63,32 @@ export default async function CardDetailPage({
     signedUrl(card.image_path),
     signedUrl(card.image_back_path),
   ]);
+
+  // Grading: existing submission for this card + currently-open graders.
+  const { data: gradingSub } = await supabase
+    .from("grading_submissions")
+    .select(
+      "status, turnaround, declared_value_cents, service_fee_cents, grader_fee_cents, tracking_in, tracking_out, grade_result, created_at, company:grading_companies(name)",
+    )
+    .eq("card_id", card.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const subCompany = gradingSub
+    ? Array.isArray(gradingSub.company)
+      ? gradingSub.company[0]
+      : gradingSub.company
+    : null;
+  const { data: openGraders } = await supabase
+    .from("grading_companies")
+    .select("key, name, turnaround_days")
+    .eq("accepting", true)
+    .order("sort_order", { ascending: true });
+
+  // Intake cards only (game pulls have status 'won'); not already in transit.
+  const gradable = !["won", "grading", "shipping", "shipped", "sold"].includes(
+    card.status,
+  );
 
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-12">
@@ -158,6 +186,55 @@ export default async function CardDetailPage({
             <GradeReportView report={card.grade_report as GradeReportData} />
           </section>
         )}
+
+        {/* Grading submission */}
+        <section className="border border-black/10 p-6 dark:border-white/15">
+          <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+            Grading
+          </p>
+          {gradingSub ? (
+            <div className="space-y-1 text-sm">
+              <p>
+                <span className="font-medium">
+                  {subCompany?.name ?? "Grader"}
+                </span>{" "}
+                ·{" "}
+                {labelFor(GRADING_SUB_STATUSES, gradingSub.status)}
+                {gradingSub.grade_result
+                  ? ` · graded ${gradingSub.grade_result}`
+                  : ""}
+              </p>
+              <p className="text-xs text-zinc-500">
+                Declared {formatMoneyCents(gradingSub.declared_value_cents)} ·
+                service fee {formatMoneyCents(gradingSub.service_fee_cents)}
+                {gradingSub.grader_fee_cents
+                  ? ` · grader fee ${formatMoneyCents(gradingSub.grader_fee_cents)}`
+                  : " · grader fee billed at cost"}
+              </p>
+              {(gradingSub.tracking_in || gradingSub.tracking_out) && (
+                <p className="text-xs text-zinc-500">
+                  {gradingSub.tracking_in
+                    ? `To grader: ${gradingSub.tracking_in}`
+                    : ""}
+                  {gradingSub.tracking_out
+                    ? ` · Back to you: ${gradingSub.tracking_out}`
+                    : ""}
+                </p>
+              )}
+            </div>
+          ) : gradable ? (
+            <SubmitGrading
+              cardId={card.id}
+              fmvCents={card.fmv_cents}
+              companies={openGraders ?? []}
+            />
+          ) : (
+            <p className="text-sm text-zinc-500">
+              This card isn&apos;t eligible for grading submission (game pulls
+              and cards already in transit can&apos;t be submitted).
+            </p>
+          )}
+        </section>
 
         <section className="border border-black/10 p-6 dark:border-white/15">
           <CardEditForm

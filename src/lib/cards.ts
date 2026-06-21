@@ -75,7 +75,46 @@ const EXTRA_STATUS_LABELS: Record<string, string> = {
   inventory: "In pack pool",
   shipping: "Shipping",
   shipped: "Shipped to you",
+  won: "Won from a pack",
 };
+
+export const GRADING_TURNAROUNDS = [
+  { value: "standard", label: "Standard", addCents: 0 },
+  { value: "express", label: "Express (+$15)", addCents: 1500 },
+  { value: "super", label: "Super Express (+$40)", addCents: 4000 },
+] as const;
+
+export const GRADING_SUB_STATUSES = [
+  { value: "submitted", label: "Submitted" },
+  { value: "sent", label: "Sent to grader" },
+  { value: "grading", label: "Grading" },
+  { value: "graded", label: "Graded" },
+  { value: "returned", label: "Returned" },
+  { value: "completed", label: "Completed" },
+  { value: "canceled", label: "Canceled" },
+] as const;
+
+/** APEX service fee (cents) by declared value + turnaround — mirrors the DB fn. */
+export function gradingServiceFeeCents(
+  valueCents: number,
+  turnaround: string,
+): number {
+  const base =
+    valueCents <= 20000
+      ? 800
+      : valueCents <= 50000
+        ? 1200
+        : valueCents <= 100000
+          ? 2000
+          : valueCents <= 250000
+            ? 4000
+            : valueCents <= 500000
+              ? 7500
+              : Math.floor((valueCents * 2) / 100);
+  const add =
+    GRADING_TURNAROUNDS.find((t) => t.value === turnaround)?.addCents ?? 0;
+  return base + add;
+}
 
 /** Human label for any card status, including pool/shipping states. */
 export function cardStatusLabel(value: string | null | undefined): string {

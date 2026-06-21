@@ -186,14 +186,9 @@ export default async function PricingPage() {
         {/* GRADING FEE SCHEDULE */}
         <section className="space-y-8">
           <div className="text-center">
-            <div className="flex items-center justify-center gap-3">
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Grading submission fees
-              </h2>
-              <span className="border border-black/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:border-white/20">
-                Coming soon
-              </span>
-            </div>
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              Grading submission fees
+            </h2>
             <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
               When you submit a card to any major grading company
               through APEX, you pay their grading fee and insured shipping

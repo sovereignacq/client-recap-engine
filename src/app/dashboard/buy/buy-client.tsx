@@ -299,6 +299,16 @@ export function BuyClient({
     });
   };
 
+  const [customFund, setCustomFund] = useState("");
+  const addCustomFunds = () => {
+    const dollars = parseFloat(customFund);
+    if (!Number.isFinite(dollars) || dollars < 1) {
+      setError("Enter an amount of $1 or more.");
+      return;
+    }
+    addFunds(Math.round(dollars * 100));
+  };
+
   const testCredit = (cents: number) => {
     setError(null);
     startFund(async () => {
@@ -550,27 +560,55 @@ export function BuyClient({
             only)
           </p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {TOPUP_PRESETS.map((c) => (
+        <div className="flex flex-col items-end gap-2">
+          {/* Deposit any amount ≥ $1 */}
+          <div className="flex items-stretch gap-2">
+            <div className="flex items-center rounded-none border border-black/20 px-2 dark:border-white/25">
+              <span className="text-sm text-zinc-400">$</span>
+              <input
+                value={customFund}
+                onChange={(e) => setCustomFund(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addCustomFunds()}
+                inputMode="decimal"
+                placeholder="Amount"
+                className="w-24 bg-transparent px-1.5 py-1.5 text-sm outline-none"
+              />
+            </div>
             <button
-              key={c}
               type="button"
               disabled={isFunding}
-              onClick={() => addFunds(c)}
+              onClick={addCustomFunds}
+              className="rounded-none bg-black px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            >
+              {isFunding ? "…" : "Add funds"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowWithdraw((s) => !s)}
+              disabled={withdrawable < 500}
+              title={withdrawable < 500 ? "Minimum withdrawal is $5" : undefined}
               className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 active:scale-95 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
             >
-              Add {formatMoneyCents(c)}
+              Withdraw
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setShowWithdraw((s) => !s)}
-            disabled={withdrawable < 500}
-            title={withdrawable < 500 ? "Minimum withdrawal is $5" : undefined}
-            className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 active:scale-95 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
-          >
-            Withdraw
-          </button>
+          </div>
+          {/* Quick presets */}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-400">
+              Quick
+            </span>
+            {TOPUP_PRESETS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                disabled={isFunding}
+                onClick={() => addFunds(c)}
+                className="rounded-none border border-black/15 px-2.5 py-1 text-[11px] tabular-nums transition hover:bg-black/5 active:scale-95 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                +{formatMoneyCents(c)}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       {showWithdraw && (
