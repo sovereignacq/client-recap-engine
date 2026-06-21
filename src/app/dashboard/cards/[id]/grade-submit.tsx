@@ -18,17 +18,20 @@ export function SubmitGrading({
   fmvCents,
   companies,
   discountPct = 0,
+  availableCredits = 0,
 }: {
   cardId: string;
   fmvCents: number | null;
   companies: Company[];
   discountPct?: number;
+  availableCredits?: number;
 }) {
   const [company, setCompany] = useState(companies[0]?.key ?? "");
   const [turnaround, setTurnaround] = useState("standard");
   const [valueDollars, setValueDollars] = useState(
     fmvCents ? (fmvCents / 100).toString() : "",
   );
+  const [useCredit, setUseCredit] = useState(false);
   const [pending, startTransition] = useTransition();
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,8 +41,14 @@ export function SubmitGrading({
     () => gradingServiceFeeCents(valueCents, turnaround),
     [valueCents, turnaround],
   );
-  const fee =
-    discountPct > 0 ? Math.round(baseFee * (1 - discountPct / 100)) : baseFee;
+  // Credits cover value-tier cards (declared value up to $500) and waive the fee.
+  const creditEligible = availableCredits > 0 && valueCents > 0 && valueCents <= 50000;
+  const applyingCredit = useCredit && creditEligible;
+  const fee = applyingCredit
+    ? 0
+    : discountPct > 0
+      ? Math.round(baseFee * (1 - discountPct / 100))
+      : baseFee;
 
   if (companies.length === 0) {
     return (
@@ -68,6 +77,7 @@ export function SubmitGrading({
         company,
         valueCents,
         turnaround,
+        applyingCredit,
       );
       if (res.ok)
         setDone(
@@ -133,13 +143,34 @@ export function SubmitGrading({
         </label>
       </div>
 
+      {availableCredits > 0 && (
+        <label
+          className={`flex items-center gap-2 text-xs ${
+            creditEligible ? "" : "text-zinc-400"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={applyingCredit}
+            disabled={!creditEligible}
+            onChange={(e) => setUseCredit(e.target.checked)}
+          />
+          Use a grading credit to waive the fee ({availableCredits} available
+          {creditEligible ? "" : " · value-tier cards up to $500 only"})
+        </label>
+      )}
+
       <div className="flex items-center justify-between border-t border-black/10 pt-3 text-sm dark:border-white/15">
         <span className="text-zinc-500">
           APEX service fee
-          {discountPct > 0 ? ` · ${discountPct}% member discount` : ""}
+          {applyingCredit
+            ? " · credit applied"
+            : discountPct > 0
+              ? ` · ${discountPct}% member discount`
+              : ""}
         </span>
         <span className="font-semibold tabular-nums">
-          {discountPct > 0 && (
+          {(applyingCredit || discountPct > 0) && (
             <span className="mr-2 font-normal text-zinc-400 line-through">
               {formatMoneyCents(baseFee)}
             </span>

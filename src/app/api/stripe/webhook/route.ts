@@ -204,6 +204,17 @@ async function upsertSubscription(
     .upsert(row, { onConflict: "id" });
 
   if (error) throw error;
+
+  // Grant a membership's annual grading credits once per paid billing period.
+  // No-op for pro_* plans (zero credits) and for non-active states.
+  if (sub.status === "active" && plan) {
+    await admin.rpc("grant_membership_credits", {
+      p_user: userId,
+      p_sub_id: sub.id,
+      p_plan: plan,
+      p_period_start: periodStart ? toIso(periodStart) : null,
+    });
+  }
 }
 
 function toIso(epochSeconds: number): string {

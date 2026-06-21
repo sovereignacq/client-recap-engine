@@ -512,7 +512,7 @@ export async function deleteCardAction(cardId: string): Promise<void> {
 }
 
 export type GradingResult =
-  | { ok: true; serviceFeeCents: number; balanceAfter: number }
+  | { ok: true; serviceFeeCents: number; usedCredit: boolean; balanceAfter: number }
   | { ok: false; error: string };
 
 /** Submit an intake card to an open grading company (APEX service fee from wallet). */
@@ -521,6 +521,7 @@ export async function requestGradingAction(
   company: string,
   declaredValueCents: number,
   turnaround: string,
+  useCredit: boolean = false,
 ): Promise<GradingResult> {
   const supabase = await createClient();
   const {
@@ -533,6 +534,7 @@ export async function requestGradingAction(
     p_company: company,
     p_declared_value_cents: Math.round(declaredValueCents),
     p_turnaround: turnaround,
+    p_use_credit: useCredit,
   });
   if (error) {
     const msg = /suspended/i.test(error.message)
@@ -548,8 +550,17 @@ export async function requestGradingAction(
   }
   revalidatePath(`/dashboard/cards/${cardId}`);
   revalidatePath("/dashboard/cards");
-  const d = data as { service_fee_cents: number; balance_after: number };
-  return { ok: true, serviceFeeCents: d.service_fee_cents, balanceAfter: d.balance_after };
+  const d = data as {
+    service_fee_cents: number;
+    used_credit: boolean;
+    balance_after: number;
+  };
+  return {
+    ok: true,
+    serviceFeeCents: d.service_fee_cents,
+    usedCredit: d.used_credit,
+    balanceAfter: d.balance_after,
+  };
 }
 
 export type ShipResult =
