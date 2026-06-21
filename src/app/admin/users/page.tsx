@@ -44,7 +44,7 @@ export default async function AdminUsersPage() {
         </div>
 
         <div className="overflow-x-auto border border-black/10 dark:border-white/15">
-          <table className="w-full border-collapse text-sm">
+          <table className="w-full min-w-[680px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-black/10 text-left text-[10px] uppercase tracking-[0.12em] text-zinc-400 dark:border-white/15">
                 <th className="px-4 py-3">User</th>

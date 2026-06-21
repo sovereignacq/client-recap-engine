@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { cardTitle, formatMoneyCents } from "@/lib/cards";
 import { InventoryToggle } from "./inventory-toggle";
 import { PoolSearch } from "./pool-search";
+import { AdminArchiveControl } from "../cards/[id]/archive-control";
 
 type CardRow = {
   id: string;
@@ -30,7 +31,10 @@ function Row({ c }: { c: CardRow }) {
           {formatMoneyCents(c.fmv_cents, c.fmv_currency)}
         </p>
       </div>
-      <InventoryToggle cardId={c.id} inInventory={c.in_inventory} />
+      <div className="flex shrink-0 items-center gap-3">
+        <InventoryToggle cardId={c.id} inInventory={c.in_inventory} />
+        <AdminArchiveControl cardId={c.id} archived={false} />
+      </div>
     </li>
   );
 }
