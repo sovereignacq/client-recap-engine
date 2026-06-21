@@ -354,6 +354,15 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
   const wantsInventory = String(formData.get("in_inventory") ?? "") === "1";
   const stockInPool = wantsInventory && isStaff(await getRole());
 
+  // Pool cards must be owned by the house owner — that's who open_pack draws
+  // from and who the inventory view lists. Otherwise a staff-added pool card
+  // would never actually enter the pool.
+  let ownerId = user.id;
+  if (stockInPool) {
+    const { data: ownerUuid } = await supabase.rpc("app_owner_id");
+    if (typeof ownerUuid === "string" && ownerUuid) ownerId = ownerUuid;
+  }
+
   // Status is automatic, not picked by the user: pooled stock is "inventory",
   // a freshly graded card starts "graded", otherwise "received".
   const status = stockInPool ? "inventory" : gradeReport ? "graded" : "received";
@@ -361,7 +370,7 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
   const { data, error } = await supabase
     .from("cards")
     .insert({
-      owner_id: user.id,
+      owner_id: ownerId,
       submitter_id: submitterId,
       category,
       sport_or_game: String(formData.get("sport_or_game") ?? "").trim() || null,
