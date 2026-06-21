@@ -137,7 +137,7 @@ export default async function Home() {
 
           <div className="mt-16 grid gap-px border border-black/10 bg-black/10 sm:grid-cols-2 lg:grid-cols-3 dark:border-white/15 dark:bg-white/15">
             <Capability n="01" title="Grade & identify" body="Photograph front and back. Get the set, year, number, and variant with a confidence score, then serialize and value it." />
-            <Capability n="02" title="Submit to graders" soon body="Send cards to all the major grading companies — we handle intake, insured shipping, and tracking. Pick whichever grader is open." />
+            <Capability n="02" title="Submit to graders" body="Send cards to all the major grading companies that are open — we handle intake, insured shipping, and tracking, with the grading fee billed at cost." />
             <Capability n="03" title="Buy cards & rips" body="Shop singles and packs from the floor, then keep, grade, or list what you pull." />
             <Capability n="04" title="Sell to us" body="Sell cards you own — or just pulled — back to APEX at fair market value." />
             <Capability n="05" title="Ship it home" body="Want the physical card? Have any pull mailed to you, insured and fully tracked, for a flat fee." />

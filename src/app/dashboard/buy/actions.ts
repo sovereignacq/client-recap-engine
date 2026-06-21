@@ -155,8 +155,13 @@ export async function createDepositCheckoutAction(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
-  if (!Number.isFinite(amountCents) || amountCents < 100 || amountCents > 1000000) {
-    return { ok: false, error: "Choose a valid amount." };
+  // Minimum $1; upper bound is just Stripe's per-charge ceiling ($999,999.99)
+  // so customers can deposit any amount at or above the minimum.
+  if (!Number.isFinite(amountCents) || amountCents < 100) {
+    return { ok: false, error: "Minimum deposit is $1." };
+  }
+  if (amountCents > 99_999_999) {
+    return { ok: false, error: "That exceeds the single-deposit maximum." };
   }
 
   // Responsible-play guards: respect an active break and the daily deposit cap.

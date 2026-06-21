@@ -511,6 +511,47 @@ export async function deleteCardAction(cardId: string): Promise<void> {
   redirect("/dashboard/cards");
 }
 
+export type GradingResult =
+  | { ok: true; serviceFeeCents: number; balanceAfter: number }
+  | { ok: false; error: string };
+
+/** Submit an intake card to an open grading company (APEX service fee from wallet). */
+export async function requestGradingAction(
+  cardId: string,
+  company: string,
+  declaredValueCents: number,
+  turnaround: string,
+): Promise<GradingResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const { data, error } = await supabase.rpc("request_grading_submission", {
+    p_card_id: cardId,
+    p_company: company,
+    p_declared_value_cents: Math.round(declaredValueCents),
+    p_turnaround: turnaround,
+  });
+  if (error) {
+    const msg = /suspended/i.test(error.message)
+      ? "Your account is suspended — grading is paused."
+      : /not accepting/i.test(error.message)
+        ? "That grader isn't accepting submissions right now."
+        : /not enough wallet/i.test(error.message)
+          ? "Not enough wallet balance for the service fee."
+          : /only intake cards/i.test(error.message)
+            ? "Only intake cards (not game pulls) can be submitted for grading."
+            : error.message;
+    return { ok: false, error: msg };
+  }
+  revalidatePath(`/dashboard/cards/${cardId}`);
+  revalidatePath("/dashboard/cards");
+  const d = data as { service_fee_cents: number; balance_after: number };
+  return { ok: true, serviceFeeCents: d.service_fee_cents, balanceAfter: d.balance_after };
+}
+
 export type ShipResult =
   | { ok: true; balanceAfter: number }
   | { ok: false; error: string };
