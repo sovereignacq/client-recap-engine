@@ -90,3 +90,69 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .holo-card, .holo-card::after, .card-float { animation: none; }
 }
+
+/* ---- Pack-rip reveal animation (TikTok-style pack opening) ---- */
+@keyframes packWiggle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-2px) rotate(-1.5deg); }
+  75% { transform: translateY(2px) rotate(1.5deg); }
+}
+@keyframes packTearTop {
+  to { transform: translateY(-130px) rotate(-10deg); opacity: 0; }
+}
+@keyframes packTearBottom {
+  to { transform: translateY(70px) scale(0.96); opacity: 0; }
+}
+@keyframes deckRise {
+  from { transform: translateY(40px) scale(0.85); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+/* One decoy card: fly in face-down, flip to its face, slide off. */
+@keyframes dealCycle {
+  0% { transform: translateX(115%) rotateY(180deg) scale(0.92); opacity: 0; }
+  20% { transform: translateX(0) rotateY(180deg) scale(1); opacity: 1; }
+  46% { transform: translateX(0) rotateY(0deg) scale(1); opacity: 1; }
+  66% { transform: translateX(0) rotateY(0deg) scale(1); opacity: 1; }
+  100% { transform: translateX(-120%) rotateY(0deg) scale(0.92); opacity: 0; }
+}
+/* The won card: fly in face-down, flip up, settle. */
+@keyframes revealPop {
+  0% { transform: rotateY(180deg) scale(0.8); opacity: 0; }
+  35% { transform: rotateY(180deg) scale(1); opacity: 1; }
+  62% { transform: rotateY(0deg) scale(1.08); opacity: 1; }
+  100% { transform: rotateY(0deg) scale(1); opacity: 1; }
+}
+@keyframes anticipateGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+  50% { box-shadow: 0 0 70px 14px rgba(251,191,36,0.55); }
+}
+@keyframes anticipateShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+@keyframes burstRing {
+  from { transform: scale(0.2); opacity: 0.85; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+@keyframes spinRays {
+  to { transform: rotate(360deg); }
+}
+@keyframes confettiFall {
+  to { transform: translateY(420px) rotate(620deg); opacity: 0; }
+}
+@keyframes subtleShine {
+  0% { opacity: 0; transform: scale(0.9); }
+  50% { opacity: 0.6; }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+
+.pack-3d { transform-style: preserve-3d; }
+.pack-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.pack-face-back { transform: rotateY(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pack-anim { animation-duration: 0.001ms !important; }
+}

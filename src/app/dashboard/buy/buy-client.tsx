@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
 import { PackCarousel } from "./pack-carousel";
-import { PackWheel } from "./pack-wheel";
+import { PackRip } from "./pack-rip";
 import { ResetTimer } from "./reset-timer";
 import {
   openPackAction,
@@ -1060,6 +1060,7 @@ export function BuyClient({
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
           onClick={() => {
+            if (phase === "wheel") return; // don't close mid-rip
             setResult(null);
             router.refresh();
           }}
@@ -1070,11 +1071,12 @@ export function BuyClient({
           >
             {phase === "wheel" ? (
               <div className="py-2">
-                <PackWheel
+                <PackRip
                   reel={reel}
                   wonImage={result.imageUrl}
                   wonLabel={result.title}
-                  onLanded={() => setPhase("revealed")}
+                  jackpot={result.outcome === "above" || result.guaranteed}
+                  onDone={() => setPhase("revealed")}
                 />
               </div>
             ) : (
