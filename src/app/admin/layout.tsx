@@ -41,6 +41,7 @@ export default async function AdminLayout({
                   items: [
                     { label: "Sell offers", href: "/admin/offers" },
                     { label: "Withdrawals", href: "/admin/withdrawals" },
+                    { label: "Grading", href: "/admin/grading" },
                     { label: "Shipments", href: "/admin/shipments" },
                   ],
                 },

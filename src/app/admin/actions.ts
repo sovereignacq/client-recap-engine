@@ -256,6 +256,47 @@ export async function adminUpdateShipment(
   revalidatePath("/admin/shipments");
 }
 
+/** Advance a grading submission, record at-cost grader fee, tracking, grade. */
+export async function adminUpdateGrading(
+  id: string,
+  status: string,
+  graderFeeCents?: number,
+  trackingIn?: string,
+  trackingOut?: string,
+  grade?: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_update_grading", {
+    p_id: id,
+    p_status: status,
+    p_grader_fee_cents:
+      graderFeeCents != null && Number.isFinite(graderFeeCents)
+        ? Math.round(graderFeeCents)
+        : null,
+    p_tracking_in: trackingIn ?? null,
+    p_tracking_out: trackingOut ?? null,
+    p_grade: grade ?? null,
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/admin/grading");
+}
+
+/** Open or close a grading company for new submissions. */
+export async function adminSetGraderAccepting(
+  key: string,
+  accepting: boolean,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_set_grader_accepting", {
+    p_key: key,
+    p_accepting: accepting,
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/admin/grading");
+}
+
 export async function adminUpdateCardStatus(
   cardId: string,
   status: string,
