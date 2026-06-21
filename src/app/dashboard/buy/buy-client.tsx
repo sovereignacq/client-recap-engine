@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
+import { PackCarousel } from "./pack-carousel";
 import {
   openPackAction,
   topUpAction,
@@ -101,18 +102,6 @@ const MODE_DESC: Record<string, string> = {
   max: "All or nothing — only Below or Jackpot.",
 };
 const TOPUP_PRESETS = [500, 2000, 5000, 10000];
-
-// Rarity-style accents per tier (low → high), for a gamier feel.
-const TIER_ACCENTS = [
-  "bg-zinc-400",
-  "bg-emerald-500",
-  "bg-sky-500",
-  "bg-teal-500",
-  "bg-violet-500",
-  "bg-orange-500",
-  "bg-pink-500",
-  "bg-amber-400",
-];
 
 type Won = Extract<OpenResult, { ok: true }>;
 type TradeWon = Extract<TradeUpResult, { ok: true }>;
@@ -812,78 +801,19 @@ export function BuyClient({
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-px border border-black/10 bg-black/10 sm:grid-cols-2 lg:grid-cols-3 dark:border-white/15 dark:bg-white/15">
-        {tiers.map((t, ti) => {
-          const priceMult = mode?.priceMult ?? 1;
-          const effPrice = Math.round(t.priceCents * catMult * priceMult);
-          const adj = t.odds.map((b) => ({
-            ...b,
-            w: b.weight * (mode?.weightMults?.[b.key] ?? 1),
-          }));
-          const total = adj.reduce((s, b) => s + b.w, 0) || 1;
-          const minCents = Math.round(Math.min(...t.odds.map((b) => b.min_mult)) * effPrice);
-          const maxCents = Math.round(Math.max(...t.odds.map((b) => b.max_mult)) * effPrice);
-          const pityCount = pity[`${categoryKey}:${t.key}`] ?? 0;
-          const pityPct = Math.min(100, (pityCount / t.pityThreshold) * 100);
-          const canAfford = balance >= effPrice;
-          return (
-            <div
-              key={t.key}
-              className="flex flex-col bg-white p-6 transition-colors hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
-            >
-              <span
-                className={`mb-3 h-1 w-10 ${TIER_ACCENTS[ti % TIER_ACCENTS.length]}`}
-              />
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                {t.name}
-              </p>
-              <p className="mt-2 text-3xl font-semibold tabular-nums">
-                {formatMoneyCents(effPrice)}
-              </p>
-              <p className="mt-1 text-[11px] uppercase tracking-[0.1em] text-zinc-500">
-                Pull {formatMoneyCents(minCents)} – {formatMoneyCents(maxCents)}
-              </p>
-              <ul className="mt-4 space-y-1 text-xs text-zinc-500">
-                {adj
-                  .filter((b) => b.w > 0)
-                  .map((b) => (
-                    <li key={b.key} className="flex justify-between gap-2">
-                      <span>{b.label}</span>
-                      <span className="tabular-nums">
-                        {Math.round((b.w / total) * 100)}%
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-
-              <div className="mt-4">
-                <div className="flex justify-between text-[10px] uppercase tracking-[0.12em] text-zinc-400">
-                  <span>Guaranteed win</span>
-                  <span className="tabular-nums">
-                    {pityCount}/{t.pityThreshold}
-                  </span>
-                </div>
-                <div className="mt-1 h-1 w-full bg-black/10 dark:bg-white/15">
-                  <div className="h-full bg-black dark:bg-white" style={{ width: `${pityPct}%` }} />
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => open(t)}
-                disabled={!poolAvailable || isOpening || !canAfford || paused}
-                className="mt-5 rounded-none bg-black px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 active:scale-[0.97] disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-              >
-                {openingKey === t.key
-                  ? "Opening…"
-                  : canAfford
-                    ? "Open pack"
-                    : "Add funds"}
-              </button>
-            </div>
-          );
-        })}
-      </div>
+      <PackCarousel
+        tiers={tiers}
+        mode={mode}
+        catMult={catMult}
+        balance={balance}
+        pity={pity}
+        categoryKey={categoryKey}
+        onOpen={open}
+        openingKey={openingKey}
+        isOpening={isOpening}
+        poolAvailable={poolAvailable}
+        paused={paused}
+      />
 
       {/* Trade-up: consolidate several cards into one bigger pull. */}
       <details className="border border-black/10 dark:border-white/15">

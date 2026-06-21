@@ -41,7 +41,8 @@ export default async function Home() {
             <p className="mt-8 max-w-md text-base leading-7 text-zinc-600 dark:text-zinc-400">
               Rip digital packs and pull <strong>real, gradeable cards</strong>{" "}
               — keep them, cash them out, or have them shipped to your door. Then
-              grade, submit to PSA &amp; TAG, buy, and sell, all in one account.
+              grade, submit to all major card graders, buy, and sell, all in
+              one account.
             </p>
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
               <Link href={playHref} className={BTN_SOLID}>
@@ -136,7 +137,7 @@ export default async function Home() {
 
           <div className="mt-16 grid gap-px border border-black/10 bg-black/10 sm:grid-cols-2 lg:grid-cols-3 dark:border-white/15 dark:bg-white/15">
             <Capability n="01" title="Grade & identify" body="Photograph front and back. Get the set, year, number, and variant with a confidence score, then serialize and value it." />
-            <Capability n="02" title="Submit to graders" soon body="Send cards to PSA, TAG, and the majors without the paperwork — we handle insured shipping and tracking." />
+            <Capability n="02" title="Submit to graders" soon body="Send cards to all the major grading companies — we handle intake, insured shipping, and tracking. Pick whichever grader is open." />
             <Capability n="03" title="Buy cards & rips" body="Shop singles and packs from the floor, then keep, grade, or list what you pull." />
             <Capability n="04" title="Sell to us" body="Sell cards you own — or just pulled — back to APEX at fair market value." />
             <Capability n="05" title="Ship it home" body="Want the physical card? Have any pull mailed to you, insured and fully tracked, for a flat fee." />
