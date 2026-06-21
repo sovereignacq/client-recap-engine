@@ -14,7 +14,11 @@ import {
 import { CardEditForm } from "./card-edit-form";
 import { DeleteCardButton } from "./delete-button";
 import { SubmitGrading } from "./grade-submit";
-import { GradeReportView, type GradeReportData } from "../grade-report";
+import {
+  GradeReportView,
+  GradeFlawMap,
+  type GradeReportData,
+} from "../grade-report";
 
 export default async function CardDetailPage({
   params,
@@ -64,6 +68,9 @@ export default async function CardDetailPage({
     signedUrl(card.image_back_path),
   ]);
 
+  const gradeReport = (card.grade_report as GradeReportData | null) ?? null;
+  const gradeReportFlaws = gradeReport?.flaws ?? [];
+
   // Grading: existing submission for this card + currently-open graders.
   const { data: gradingSub } = await supabase
     .from("grading_submissions")
@@ -86,6 +93,9 @@ export default async function CardDetailPage({
     .order("sort_order", { ascending: true });
   const { data: memberDiscount } = await supabase.rpc(
     "current_member_discount_pct",
+  );
+  const { data: availableCredits } = await supabase.rpc(
+    "available_grading_credits",
   );
 
   // Intake cards only (game pulls have status 'won'); not already in transit.
@@ -150,36 +160,56 @@ export default async function CardDetailPage({
           </div>
         </section>
 
-        {(imageUrl || imageBackUrl) && (
-          <div className="flex flex-wrap gap-3">
-            {imageUrl && (
-              <figure className="space-y-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imageUrl}
+        {(imageUrl || imageBackUrl) &&
+          (gradeReportFlaws.length > 0 ? (
+            <div className="flex flex-wrap gap-4">
+              {imageUrl && (
+                <GradeFlawMap
+                  imageUrl={imageUrl}
                   alt={`${card.serial} front`}
-                  className="max-h-80 w-auto border border-black/10 dark:border-white/15"
+                  side="front"
+                  flaws={gradeReportFlaws}
                 />
-                <figcaption className="text-[11px] uppercase tracking-[0.15em] text-zinc-400">
-                  Front
-                </figcaption>
-              </figure>
-            )}
-            {imageBackUrl && (
-              <figure className="space-y-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imageBackUrl}
+              )}
+              {imageBackUrl && (
+                <GradeFlawMap
+                  imageUrl={imageBackUrl}
                   alt={`${card.serial} back`}
-                  className="max-h-80 w-auto border border-black/10 dark:border-white/15"
+                  side="back"
+                  flaws={gradeReportFlaws}
                 />
-                <figcaption className="text-[11px] uppercase tracking-[0.15em] text-zinc-400">
-                  Back
-                </figcaption>
-              </figure>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {imageUrl && (
+                <figure className="space-y-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imageUrl}
+                    alt={`${card.serial} front`}
+                    className="max-h-80 w-auto border border-black/10 dark:border-white/15"
+                  />
+                  <figcaption className="text-[11px] uppercase tracking-[0.15em] text-zinc-400">
+                    Front
+                  </figcaption>
+                </figure>
+              )}
+              {imageBackUrl && (
+                <figure className="space-y-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imageBackUrl}
+                    alt={`${card.serial} back`}
+                    className="max-h-80 w-auto border border-black/10 dark:border-white/15"
+                  />
+                  <figcaption className="text-[11px] uppercase tracking-[0.15em] text-zinc-400">
+                    Back
+                  </figcaption>
+                </figure>
+              )}
+            </div>
+          ))}
 
         {card.grade_report && (
           <section className="border border-black/10 p-6 dark:border-white/15">
@@ -231,6 +261,7 @@ export default async function CardDetailPage({
               fmvCents={card.fmv_cents}
               companies={openGraders ?? []}
               discountPct={(memberDiscount as number) ?? 0}
+              availableCredits={(availableCredits as number) ?? 0}
             />
           ) : (
             <p className="text-sm text-zinc-500">

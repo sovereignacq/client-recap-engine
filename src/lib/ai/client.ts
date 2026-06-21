@@ -396,12 +396,19 @@ Respond with ONLY one JSON object, no markdown.`;
 // called out in the summary.
 // ============================================================
 
+export type FlawBox = { x: number; y: number; w: number; h: number };
+
 export type GradeFlaw = {
   area: "centering" | "corners" | "edges" | "surface" | "print" | "other";
   location: string; // e.g. "top-right corner (front)"
   description: string;
   severity: "minor" | "moderate" | "major";
+  side: "front" | "back";
+  box: FlawBox | null; // normalized 0..1 bounding box on that side's photo
 };
+
+/** PSA-style grade qualifier codes. */
+export type GradeQualifier = "OC" | "ST" | "PD" | "OF" | "MC" | "MK";
 
 export type GradeResult = {
   overall: number; // 1–10, .5 steps
@@ -411,20 +418,36 @@ export type GradeResult = {
   edges: number;
   surface: number;
   centeringMeasurement: string; // e.g. "55/45 L-R · 60/40 T-B" or ""
+  qualifiers: GradeQualifier[];
   flaws: GradeFlaw[];
   summary: string;
   photoQuality: "good" | "fair" | "poor";
   model: string;
 };
 
-const GRADE_SCALE = `STRICT 1–10 SCALE (be critical — most raw cards are 7–9, not 10):
-- 10 GEM-MINT: virtually perfect. Sharp corners, clean edges, flawless surface, centering ~55/45 or better on both axes.
-- 9 MINT: one tiny flaw allowed (a hint of edge wear, very minor centering off).
-- 8 NM-MINT: minor wear — slight corner softness or minor edge/surface flaw.
-- 7 NEAR-MINT: a couple of minor flaws or one moderate.
-- 6 EX-MINT / 5 EX: noticeable corner/edge wear, light surface scratches, off-centering.
-- 4 VG-EX / 3 VG: rounding, creasing starting, surface scuffing.
-- 2 GOOD / 1 POOR: heavy wear, creases, major surface damage.`;
+// Encodes PSA's published grading standards (centering tolerances + condition
+// criteria per grade). Be strict and consistent: the overall is holistic and
+// capped by the weakest attribute and by the centering tolerance for that grade.
+const GRADE_SCALE = `PSA GRADING STANDARDS — apply them strictly and consistently. Centering tolerances are HARD CAPS: if front/back centering is worse than a grade allows, the card CANNOT receive that grade (drop it, or apply an OC qualifier).
+
+- 10 GEM-MT (Gem Mint): four perfectly sharp corners, sharp focus, full original gloss, no staining (a tiny printing imperfection is allowed if it doesn't impair appeal). Centering up to 55/45–60/40 on the FRONT and 75/25 on the BACK.
+- 9 MINT: only ONE minor flaw — a slight wax/print imperfection or slightly off-white borders. Centering up to 60/40 FRONT, 90/10 BACK.
+- 8 NM-MT (Near Mint-Mint): slight fraying on a corner, slight surface/print flaw, or slightly off-white borders. Centering up to 65/35 FRONT, 90/10 BACK.
+- 7 NM (Near Mint): slight surface wear on close inspection; slight fraying at corners; minor off-centering. Centering up to 70/30 FRONT, 90/10 BACK.
+- 6 EX-MT (Excellent-Mint): visible surface wear or a light scratch; slight corner fraying. Centering up to 80/20 FRONT.
+- 5 EX (Excellent): minor corner rounding; more visible surface wear; minor edge chipping. Centering up to 85/15 FRONT.
+- 4 VG-EX: corners slightly rounded; noticeable but modest surface wear; light scuffing; some gloss loss. Centering up to 85/15 FRONT.
+- 3 VG (Very Good): accelerated corner rounding/layering; obvious surface wear, scratching, scuffing; possible light staining or a minor crease. Centering up to 90/10.
+- 2 GOOD: corners rounded well beyond fraying; heavy surface wear, scuffing, staining; edge chipping; possible crease(s).
+- 1 PR (Poor): major creasing, heavy staining, paper loss, destroyed corners; possible writing/tape/holes/miscut.
+
+GRADE QUALIFIERS (apply only when an otherwise higher-grade card is held back by a SINGLE specific defect):
+- OC = Off-Center (centering beyond the grade's tolerance)
+- ST = Staining
+- PD = Print Defect (spot, line, or snow)
+- OF = Out of Focus (image printed out of register/blurry)
+- MC = Miscut (card cut so the image/border is into the design)
+- MK = Marks (pen, pencil, or other handling marks)`;
 
 /** Grade a card strictly from its photos. */
 export async function gradeCard(input: {
@@ -437,25 +460,32 @@ export async function gradeCard(input: {
       ? "Two photos are provided: the FIRST is the front, the SECOND is the back. Grade BOTH sides — a flaw on either side counts."
       : "Only the front photo is provided. Grade what you can and note in the summary that the back was not assessed (this caps the grade).";
 
-  const prompt = `You are a professional trading-card grader doing a strict, condition-only assessment from photos. Be critical and conservative — when in doubt, grade DOWN.
+  const prompt = `You are a PSA-trained professional card grader doing a strict, condition-only assessment from photos. Be critical, conservative, and CONSISTENT — apply the PSA standards below exactly. When in doubt, grade DOWN. Most raw cards are 7–9, not 10.
 
 ${imageNote}
 
 ${GRADE_SCALE}
 
-ASSESS FOUR CATEGORIES, each 1–10:
-- centering: estimate the border ratios left/right and top/bottom; worse centering = lower.
-- corners: sharpness vs. softening, fraying, rounding, dings. Check all four, front and back.
-- edges: chipping, whitening, roughness along all four edges, front and back.
-- surface: scratches, print lines/dots, scuffs, indentations, gloss loss, stains, creases.
+ASSESS FOUR ATTRIBUTES, each 1–10, the PSA way:
+- centering: read the border ratios left/right and top/bottom on BOTH sides; the front tolerance is the binding one. Worse than the grade's cap = lower grade or an OC qualifier.
+- corners: all four, front and back — sharp vs. fraying, rounding, dings, layering.
+- edges: all four, front and back — chipping, whitening, roughness.
+- surface: scratches, print lines/dots/snow, scuffs, indentations, gloss loss, stains, creases, focus/registration.
 
 RULES
-- The OVERALL grade is holistic and is limited by the weakest categories (a single major flaw caps it low) — it is NOT a simple average.
-- List EVERY flaw you can actually see in "flaws", each with: area, a specific location (say which corner/edge and which side, e.g. "bottom-left corner (front)", "right edge (back)", "surface center (front)"), a short description, and severity (minor/moderate/major). If the card looks clean, return an empty list.
-- Judge ONLY condition, not the card's identity or value.
-- "centering_measurement" = your best read like "55/45 L-R · 60/40 T-B", or "" if you can't tell.
-- Set "photo_quality": good / fair / poor. If poor (blurry, low-res, glare, cropped), say so in the summary and do NOT award a high grade you can't justify.
-- "summary": 2–4 sentences explaining why it got this grade and the main factors.
+- OVERALL is HOLISTIC and capped by (a) the weakest attribute and (b) the centering tolerance for that grade — it is NOT an average. A single major flaw caps it low.
+- "label" must be the PSA label for the overall, e.g. "GEM-MT 10", "MINT 9", "NM-MT 8", "NM 7", "EX-MT 6", "EX 5", "VG-EX 4", "VG 3", "GOOD 2", "PR 1".
+- "qualifiers": list any PSA qualifier codes (OC, ST, PD, OF, MC, MK) that apply; empty array if none.
+- List EVERY flaw you can actually see in "flaws". For EACH flaw give:
+  - area, severity (minor/moderate/major), a short description,
+  - "side": "front" or "back" (which photo it is on),
+  - "location": human text like "top-right corner (front)",
+  - "box": a TIGHT bounding box around the flaw as NORMALIZED coordinates on THAT side's photo, where x,y is the top-left and w,h the size, each 0.0–1.0 (origin = top-left of the image). Make the box small and precise so it can be drawn on the photo. If you truly cannot localize it, set "box" to null.
+  If the card looks clean, return an empty list.
+- Judge ONLY condition, never identity or value.
+- "centering_measurement": your best read like "55/45 L-R · 60/40 T-B", or "".
+- "photo_quality": good / fair / poor. If poor (blurry, low-res, glare, cropped), say so and do NOT award a high grade you can't justify.
+- "summary": 2–4 sentences citing the PSA factors that set this grade.
 
 OUTPUT
 Respond with ONLY one JSON object, no markdown, no commentary.`;
@@ -483,6 +513,13 @@ Respond with ONLY one JSON object, no markdown, no commentary.`;
           surface: { type: "number" },
           centering_measurement: { type: "string" },
           photo_quality: { type: "string", enum: ["good", "fair", "poor"] },
+          qualifiers: {
+            type: "array",
+            items: {
+              type: "string",
+              enum: ["OC", "ST", "PD", "OF", "MC", "MK"],
+            },
+          },
           flaws: {
             type: "array",
             items: {
@@ -495,8 +532,19 @@ Respond with ONLY one JSON object, no markdown, no commentary.`;
                 location: { type: "string" },
                 description: { type: "string" },
                 severity: { type: "string", enum: ["minor", "moderate", "major"] },
+                side: { type: "string", enum: ["front", "back"] },
+                box: {
+                  type: "object",
+                  properties: {
+                    x: { type: "number" },
+                    y: { type: "number" },
+                    w: { type: "number" },
+                    h: { type: "number" },
+                  },
+                  required: ["x", "y", "w", "h"],
+                },
               },
-              required: ["area", "location", "description", "severity"],
+              required: ["area", "location", "description", "severity", "side"],
             },
           },
           summary: { type: "string" },
@@ -510,6 +558,7 @@ Respond with ONLY one JSON object, no markdown, no commentary.`;
           "surface",
           "centering_measurement",
           "photo_quality",
+          "qualifiers",
           "flaws",
           "summary",
         ],
@@ -532,6 +581,26 @@ Respond with ONLY one JSON object, no markdown, no commentary.`;
   };
   const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
+  const unit = (v: unknown) => {
+    const n = typeof v === "number" ? v : Number(v);
+    if (!Number.isFinite(n)) return null;
+    return Math.min(1, Math.max(0, n));
+  };
+  const parseBox = (v: unknown): FlawBox | null => {
+    if (!v || typeof v !== "object") return null;
+    const b = v as Record<string, unknown>;
+    const x = unit(b.x);
+    const y = unit(b.y);
+    let w = unit(b.w);
+    let h = unit(b.h);
+    if (x === null || y === null || w === null || h === null) return null;
+    // Keep the box inside the image.
+    w = Math.min(w, 1 - x);
+    h = Math.min(h, 1 - y);
+    if (w <= 0 || h <= 0) return null;
+    return { x, y, w, h };
+  };
+
   const flawsRaw = Array.isArray(p.flaws) ? p.flaws : [];
   const flaws: GradeFlaw[] = flawsRaw
     .map((f) => f as Record<string, unknown>)
@@ -546,8 +615,15 @@ Respond with ONLY one JSON object, no markdown, no commentary.`;
       severity: ["minor", "moderate", "major"].includes(str(f.severity))
         ? (str(f.severity) as GradeFlaw["severity"])
         : "minor",
+      side: (str(f.side) === "back" ? "back" : "front") as "front" | "back",
+      box: parseBox(f.box),
     }))
     .filter((f) => f.description || f.location);
+
+  const validQualifiers = ["OC", "ST", "PD", "OF", "MC", "MK"];
+  const qualifiers = (Array.isArray(p.qualifiers) ? p.qualifiers : [])
+    .map((q) => str(q).toUpperCase())
+    .filter((q): q is GradeQualifier => validQualifiers.includes(q));
 
   const pq = str(p.photo_quality);
 
@@ -559,6 +635,7 @@ Respond with ONLY one JSON object, no markdown, no commentary.`;
     edges: clampGrade(p.edges),
     surface: clampGrade(p.surface),
     centeringMeasurement: str(p.centering_measurement),
+    qualifiers: Array.from(new Set(qualifiers)),
     flaws,
     summary: str(p.summary),
     photoQuality: (["good", "fair", "poor"].includes(pq) ? pq : "fair") as GradeResult["photoQuality"],
