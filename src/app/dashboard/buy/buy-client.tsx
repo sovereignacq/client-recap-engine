@@ -111,6 +111,7 @@ type SpinWin = Extract<SpinResult, { ok: true }>;
 export function BuyClient({
   tiers,
   modes,
+  canChangeOdds,
   categories,
   activeCategory,
   poolAvailable,
@@ -135,6 +136,7 @@ export function BuyClient({
 }: {
   tiers: Tier[];
   modes: Mode[];
+  canChangeOdds: boolean;
   categories: Category[];
   activeCategory: string;
   poolAvailable: boolean;
@@ -807,24 +809,37 @@ export function BuyClient({
         <div className="inline-flex border border-black/15 dark:border-white/20">
           {modes.map((m) => {
             const active = m.key === modeKey;
+            const locked = !canChangeOdds && m.key !== "normal";
             return (
               <button
                 key={m.key}
                 type="button"
-                onClick={() => setModeKey(m.key)}
+                disabled={locked}
+                title={
+                  locked ? "Unlocks after your first withdrawal" : undefined
+                }
+                onClick={() => !locked && setModeKey(m.key)}
                 className={`px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] transition ${
                   active
                     ? "bg-black text-white dark:bg-white dark:text-black"
-                    : "hover:bg-black/5 dark:hover:bg-white/10"
+                    : locked
+                      ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
+                      : "hover:bg-black/5 dark:hover:bg-white/10"
                 }`}
               >
                 {m.name}
+                {locked ? " 🔒" : ""}
               </button>
             );
           })}
         </div>
-        {mode && (
+        {mode && canChangeOdds && (
           <span className="text-[11px] text-zinc-500">{MODE_DESC[mode.key] ?? ""}</span>
+        )}
+        {!canChangeOdds && (
+          <span className="text-[11px] text-zinc-500">
+            Odds control unlocks after your first withdrawal.
+          </span>
         )}
       </div>
 

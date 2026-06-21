@@ -9,14 +9,45 @@ export type PoolSearchResult =
   | { ok: true; results: PokemonSearchResult[] }
   | { ok: false; error: string };
 
-/** Staff: search the card database to stock the pool (no photos/research). */
+/** Staff: search the local card catalog to stock the pool (no photos/research). */
 export async function searchPoolCardsAction(
   query: string,
 ): Promise<PoolSearchResult> {
   if (!isStaff(await getRole())) return { ok: false, error: "Not authorized." };
-  if (!query.trim()) return { ok: true, results: [] };
+  const q = query.trim();
+  if (!q) return { ok: true, results: [] };
+
+  // Primary: our local Pokémon catalog (fast, complete, no rate limits).
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("search_pokemon_catalog", {
+    p_q: q,
+  });
+  if (!error && Array.isArray(data) && data.length > 0) {
+    const results: PokemonSearchResult[] = data.map(
+      (c: {
+        id: string;
+        name: string;
+        set_name: string | null;
+        number: string | null;
+        rarity: string | null;
+        image_url: string | null;
+        market_cents: number | null;
+      }) => ({
+        id: c.id,
+        name: c.name,
+        setName: c.set_name ?? "",
+        number: c.number ?? "",
+        rarity: c.rarity ?? "",
+        imageUrl: c.image_url,
+        marketPriceCents: c.market_cents,
+      }),
+    );
+    return { ok: true, results };
+  }
+
+  // Fallback: live database lookup if the catalog has no hit yet.
   try {
-    const results = await searchPokemonCards(query);
+    const results = await searchPokemonCards(q);
     return { ok: true, results };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Search failed." };
