@@ -1143,6 +1143,12 @@ export function BuyClient({
                     </a>
                   </div>
                 )}
+                {!sold && (
+                  <p className="mt-3 text-[10px] uppercase tracking-[0.15em] text-zinc-500">
+                    You have 3 days to decide — undecided cards auto-sell back to
+                    your wallet
+                  </p>
+                )}
 
                 <button
                   type="button"
@@ -1320,6 +1326,12 @@ export function BuyClient({
                   Keep
                 </a>
               </div>
+            )}
+            {!sold && (
+              <p className="mt-3 text-[10px] uppercase tracking-[0.15em] text-zinc-500">
+                You have 3 days to decide — undecided cards auto-sell back to your
+                wallet
+              </p>
             )}
             <button
               type="button"

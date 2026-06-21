@@ -4,40 +4,28 @@ import { createClient } from "@/lib/supabase/server";
 import { cardTitle } from "@/lib/cards";
 import { NewOfferForm } from "./new-offer-form";
 
-export default async function NewOfferPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ submitter?: string }>;
-}) {
+export default async function NewOfferPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { submitter } = await searchParams;
-
-  const { data: submitters } = await supabase
-    .from("submitters")
-    .select("id, name")
-    .eq("owner_id", user.id)
-    .order("name", { ascending: true });
-
-  // Cards still available to sell (not already sold), with the info we need to
-  // show a label and default amount.
+  // The customer's own cards that are still available to sell us — exclude
+  // house pool stock and cards already sold or in transit.
   const { data: cardRows } = await supabase
     .from("cards")
     .select(
-      "id, submitter_id, fmv_cents, card_year, manufacturer, set_name, player_or_character, card_number, variant, status",
+      "id, fmv_cents, card_year, manufacturer, set_name, player_or_character, card_number, variant, status",
     )
     .eq("owner_id", user.id)
-    .neq("status", "sold")
+    .eq("in_inventory", false)
+    .not("status", "in", "(sold,inventory,shipping,shipped)")
     .is("archived_at", null)
     .order("created_at", { ascending: false });
 
   const cards = (cardRows ?? []).map((c) => ({
     id: c.id,
-    submitterId: c.submitter_id as string | null,
     fmvCents: c.fmv_cents as number | null,
     title: cardTitle(c),
   }));
@@ -52,18 +40,14 @@ export default async function NewOfferPage({
           ← Sell-to-us
         </Link>
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">New offer</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Sell cards to us</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Pick a submitter, choose which of their cards to buy, and set the
-            amount for each (defaults to FMV).
+            Choose which of your cards to sell and set your asking price for each
+            (defaults to FMV). We pay your APEX wallet once your cards arrive.
           </p>
         </div>
 
-        <NewOfferForm
-          submitters={submitters ?? []}
-          cards={cards}
-          defaultSubmitterId={submitter ?? null}
-        />
+        <NewOfferForm cards={cards} />
       </div>
     </main>
   );

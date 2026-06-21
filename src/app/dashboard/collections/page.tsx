@@ -4,7 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { formatMoneyCents } from "@/lib/cards";
 import { NewCollection } from "./new-collection";
 
-type Row = { id: string; name: string; item_count: number; total_cents: number };
+type Row = {
+  id: string;
+  name: string;
+  item_count: number;
+  total_cents: number;
+  cover_images: string[] | null;
+};
 
 export default async function CollectionsPage() {
   const supabase = await createClient();
@@ -50,9 +56,26 @@ export default async function CollectionsPage() {
               >
                 <Link
                   href={`/dashboard/collections/${c.id}`}
-                  className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-950"
+                  className="flex items-center gap-4 px-5 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-950"
                 >
-                  <div className="min-w-0">
+                  <div className="flex shrink-0 -space-x-3">
+                    {(c.cover_images ?? []).slice(0, 4).map((src, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={i}
+                        src={src}
+                        alt=""
+                        loading="lazy"
+                        className="h-14 w-10 rounded-sm border border-black/10 bg-white object-contain shadow-sm dark:border-white/15 dark:bg-black"
+                      />
+                    ))}
+                    {(c.cover_images ?? []).length === 0 && (
+                      <div className="grid h-14 w-10 place-items-center rounded-sm border border-dashed border-black/15 text-[8px] uppercase tracking-widest text-zinc-400 dark:border-white/20">
+                        Empty
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{c.name}</p>
                     <p className="text-[11px] uppercase tracking-[0.1em] text-zinc-500">
                       {c.item_count} card{c.item_count === 1 ? "" : "s"}

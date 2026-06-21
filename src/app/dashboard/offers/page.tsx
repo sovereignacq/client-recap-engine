@@ -9,7 +9,6 @@ type OfferRow = {
   status: string;
   offer_total_cents: number;
   created_at: string;
-  submitter: { name: string } | null;
 };
 
 export default async function OffersListPage() {
@@ -21,16 +20,11 @@ export default async function OffersListPage() {
 
   const { data } = await supabase
     .from("offers")
-    .select(
-      "id, status, offer_total_cents, created_at, submitter:submitters(name)",
-    )
+    .select("id, status, offer_total_cents, created_at")
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
-  const offers: OfferRow[] = (data ?? []).map((o) => ({
-    ...o,
-    submitter: Array.isArray(o.submitter) ? (o.submitter[0] ?? null) : o.submitter,
-  })) as OfferRow[];
+  const offers: OfferRow[] = (data ?? []) as OfferRow[];
 
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-14">
@@ -47,7 +41,7 @@ export default async function OffersListPage() {
               Sell-to-us
             </h1>
             <p className="mt-1 text-sm text-zinc-500">
-              Offers to buy cards from submitters at fair market value.
+              Sell your cards to APEX at fair market value — paid to your wallet.
             </p>
           </div>
           <Link
@@ -68,10 +62,9 @@ export default async function OffersListPage() {
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">
-                      {o.submitter?.name || "Walk-in"}
+                      {offerLabel(OFFER_STATUSES, o.status)}
                     </p>
                     <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-zinc-500">
-                      {offerLabel(OFFER_STATUSES, o.status)} ·{" "}
                       {new Date(o.created_at).toLocaleDateString()}
                     </p>
                   </div>
@@ -85,7 +78,7 @@ export default async function OffersListPage() {
         ) : (
           <div className="border border-dashed border-black/20 p-16 text-center dark:border-white/20">
             <p className="text-sm text-zinc-500">
-              No offers yet. Make one to buy cards from a submitter.
+              No offers yet. Create one to sell your cards to us.
             </p>
             <Link
               href="/dashboard/offers/new"

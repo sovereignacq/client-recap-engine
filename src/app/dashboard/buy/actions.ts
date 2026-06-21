@@ -29,7 +29,7 @@ export type OpenResult =
     }
   | { ok: false; error: string };
 
-const BUYBACK_PCT = 0.8;
+const BUYBACK_PCT = 0.9;
 
 /**
  * Open a tier pack. Charging the wallet, the odds + pity draw, and the ownership
@@ -367,6 +367,27 @@ export async function sellBackAction(cardId: string): Promise<SellBackResult> {
   revalidatePath("/dashboard/cards");
   revalidatePath("/dashboard");
   return { ok: true, payoutCents: d.payout_cents, balance: d.balance_after };
+}
+
+export type KeepResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Keep a pulled card: marks the 3-day decision as made so it won't auto-sell
+ * back to the pool. The card stays in the player's collection.
+ */
+export async function keepCardAction(cardId: string): Promise<KeepResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const { error } = await supabase.rpc("keep_won_card", { p_card_id: cardId });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/buy");
+  revalidatePath("/dashboard/cards");
+  revalidatePath("/dashboard");
+  return { ok: true };
 }
 
 export type WithdrawResult =

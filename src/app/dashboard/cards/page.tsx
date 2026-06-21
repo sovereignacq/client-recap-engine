@@ -9,6 +9,7 @@ import {
   ID_STATUSES,
 } from "@/lib/cards";
 import { ShipCard } from "./ship-card";
+import { WonDecision } from "./won-decision";
 
 type CardRow = {
   id: string;
@@ -23,6 +24,9 @@ type CardRow = {
   player_or_character: string | null;
   card_number: string | null;
   variant: string | null;
+  image_url: string | null;
+  won_at: string | null;
+  decided_at: string | null;
   submitter: { name: string } | null;
   created_at: string;
 };
@@ -37,7 +41,7 @@ export default async function CardsListPage() {
   const { data } = await supabase
     .from("cards")
     .select(
-      "id, serial, status, id_status, fmv_cents, fmv_currency, card_year, manufacturer, set_name, player_or_character, card_number, variant, created_at, submitter:submitters(name)",
+      "id, serial, status, id_status, fmv_cents, fmv_currency, card_year, manufacturer, set_name, player_or_character, card_number, variant, image_url, won_at, decided_at, created_at, submitter:submitters(name)",
     )
     .eq("owner_id", user.id)
     .is("archived_at", null)
@@ -105,13 +109,27 @@ export default async function CardsListPage() {
           <ul className="border border-black/10 dark:border-white/15">
             {cards.map((c) => {
               const ship = shipByCard.get(c.id);
+              const needsDecision = c.status === "won" && !c.decided_at;
               return (
                 <li key={c.id} className="border-b border-black/10 last:border-0 dark:border-white/15">
                   <Link
                     href={`/dashboard/cards/${c.id}`}
-                    className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-950"
+                    className="flex items-center gap-4 px-5 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-950"
                   >
-                    <div className="min-w-0">
+                    {c.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={c.image_url}
+                        alt=""
+                        loading="lazy"
+                        className="h-16 w-12 shrink-0 rounded-sm border border-black/10 bg-white object-contain dark:border-white/15 dark:bg-black"
+                      />
+                    ) : (
+                      <div className="grid h-16 w-12 shrink-0 place-items-center rounded-sm border border-dashed border-black/15 text-[8px] uppercase tracking-widest text-zinc-400 dark:border-white/20">
+                        No art
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{cardTitle(c)}</p>
                       <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-zinc-500">
                         <span className="font-mono normal-case tracking-normal">
@@ -128,6 +146,14 @@ export default async function CardsListPage() {
                       {formatMoneyCents(c.fmv_cents, c.fmv_currency)}
                     </span>
                   </Link>
+
+                  {needsDecision && (
+                    <WonDecision
+                      cardId={c.id}
+                      fmvCents={c.fmv_cents}
+                      wonAt={c.won_at}
+                    />
+                  )}
 
                   {ship ? (
                     <p className="px-5 pb-4 text-[11px] uppercase tracking-[0.1em] text-zinc-500">

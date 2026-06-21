@@ -4,22 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-const VALID_STATUSES = [
-  "draft",
-  "sent",
-  "accepted",
-  "declined",
-  "paid",
-  "canceled",
-] as const;
-const VALID_PAYOUTS = [
-  "cash",
-  "paypal",
-  "venmo",
-  "store_credit",
-  "check",
-  "other",
-] as const;
+// Customers may only submit or cancel their own offers; accept/decline/pay are
+// staff actions handled in the admin area (payout goes to the seller's wallet).
+const CUSTOMER_STATUSES = ["draft", "sent", "canceled"] as const;
 
 function parseCents(raw: string): number {
   const n = Number(raw.replace(/[$,]/g, ""));
@@ -30,8 +17,9 @@ function parseCents(raw: string): number {
 export type SaveState = { ok: true; id: string } | { ok: false; error: string };
 
 /**
- * Create a sell-to-us offer from a set of the submitter's cards. The form sends
- * `card_<id>` (checked) and `amount_<id>` (dollar amount) for each selected card.
+ * Create a sell-to-us offer from a set of the customer's own cards. The form
+ * sends `card_<id>` (checked) and `amount_<id>` (dollar amount) for each card.
+ * Payout is always to the APEX wallet — the seller withdraws on their own.
  */
 export async function createOfferAction(
   formData: FormData,
@@ -42,12 +30,7 @@ export async function createOfferAction(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
 
-  const submitterId = String(formData.get("submitter_id") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
-  const payoutRaw = String(formData.get("payout_method") ?? "").trim();
-  const payoutMethod = (VALID_PAYOUTS as ReadonlyArray<string>).includes(payoutRaw)
-    ? payoutRaw
-    : null;
 
   // Collect selected cards + per-card amounts.
   const items: { card_id: string; amount_cents: number }[] = [];
@@ -69,10 +52,10 @@ export async function createOfferAction(
     .from("offers")
     .insert({
       owner_id: user.id,
-      submitter_id: submitterId,
+      submitter_id: null,
       status: "draft",
       offer_total_cents: total,
-      payout_method: payoutMethod,
+      payout_method: "wallet",
       notes,
     })
     .select("id")
@@ -100,8 +83,8 @@ export async function createOfferAction(
 }
 
 /**
- * Move an offer through its lifecycle. Marking it "paid" closes out the deal:
- * the included cards are flipped to "sold".
+ * Customer-side status change: submit a draft for review ("sent") or cancel.
+ * Accepting, declining and paying out are staff-only (see admin_pay_offer).
  */
 export async function updateOfferStatusAction(
   offerId: string,
@@ -112,46 +95,35 @@ export async function updateOfferStatusAction(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
-  if (!(VALID_STATUSES as ReadonlyArray<string>).includes(status)) {
-    return { error: "Invalid status." };
+  if (!(CUSTOMER_STATUSES as ReadonlyArray<string>).includes(status)) {
+    return { error: "You can only submit or cancel an offer." };
   }
 
-  const patch: Record<string, unknown> = {
-    status,
-    updated_at: new Date().toISOString(),
-  };
-  if (status === "accepted") patch.accepted_at = new Date().toISOString();
-  if (status === "paid") patch.paid_at = new Date().toISOString();
+  // Don't let a customer reopen/cancel an offer that's already been processed.
+  const { data: current } = await supabase
+    .from("offers")
+    .select("status")
+    .eq("id", offerId)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+  if (!current) return { error: "Offer not found." };
+  if (["accepted", "paid", "declined"].includes(current.status)) {
+    return { error: "This offer is already being processed by our team." };
+  }
 
   const { error } = await supabase
     .from("offers")
-    .update(patch)
+    .update({ status, updated_at: new Date().toISOString() })
     .eq("id", offerId)
     .eq("owner_id", user.id);
   if (error) return { error: error.message };
-
-  // On payout, mark the included cards as sold.
-  if (status === "paid") {
-    const { data: items } = await supabase
-      .from("offer_items")
-      .select("card_id")
-      .eq("offer_id", offerId)
-      .eq("owner_id", user.id);
-    const cardIds = (items ?? []).map((i) => i.card_id);
-    if (cardIds.length) {
-      await supabase
-        .from("cards")
-        .update({ status: "sold", updated_at: new Date().toISOString() })
-        .in("id", cardIds)
-        .eq("owner_id", user.id);
-    }
-  }
 
   revalidatePath(`/dashboard/offers/${offerId}`);
   revalidatePath("/dashboard/offers");
   revalidatePath("/dashboard");
 }
 
+/** Customers can edit the note on an offer that hasn't been processed yet. */
 export async function updateOfferDetailsAction(
   offerId: string,
   formData: FormData,
@@ -162,22 +134,11 @@ export async function updateOfferDetailsAction(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
-  const payoutRaw = String(formData.get("payout_method") ?? "").trim();
-  const payoutMethod = (VALID_PAYOUTS as ReadonlyArray<string>).includes(payoutRaw)
-    ? payoutRaw
-    : null;
-  const payoutReference =
-    String(formData.get("payout_reference") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
   const { error } = await supabase
     .from("offers")
-    .update({
-      payout_method: payoutMethod,
-      payout_reference: payoutReference,
-      notes,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ notes, updated_at: new Date().toISOString() })
     .eq("id", offerId)
     .eq("owner_id", user.id);
   if (error) return { error: error.message };

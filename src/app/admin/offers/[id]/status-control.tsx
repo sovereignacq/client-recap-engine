@@ -23,7 +23,9 @@ export function AdminOfferStatusControl({
     if (next === status) return;
     if (
       next === "paid" &&
-      !confirm("Mark this offer paid? The included cards will be marked sold.")
+      !confirm(
+        "Mark this offer paid? The seller's wallet will be credited the offer total and the cards move into the house pool.",
+      )
     ) {
       return;
     }
@@ -61,7 +63,9 @@ export function AdminOfferStatusControl({
         })}
       </div>
       {status === "paid" && (
-        <p className="mt-2 text-xs text-zinc-500">Included cards marked sold.</p>
+        <p className="mt-2 text-xs text-zinc-500">
+          Seller&apos;s wallet credited · cards moved to the house pool.
+        </p>
       )}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>

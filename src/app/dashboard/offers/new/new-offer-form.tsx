@@ -3,13 +3,10 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
-import { PAYOUT_METHODS } from "@/lib/offers";
 import { createOfferAction } from "../actions";
 
-type Submitter = { id: string; name: string };
 type Card = {
   id: string;
-  submitterId: string | null;
   fmvCents: number | null;
   title: string;
 };
@@ -19,31 +16,16 @@ const INPUT =
 const LABEL =
   "text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500";
 
-export function NewOfferForm({
-  submitters,
-  cards,
-  defaultSubmitterId,
-}: {
-  submitters: Submitter[];
-  cards: Card[];
-  defaultSubmitterId: string | null;
-}) {
+export function NewOfferForm({ cards }: { cards: Card[] }) {
   const router = useRouter();
   const [isSaving, startSave] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [submitterId, setSubmitterId] = useState(defaultSubmitterId ?? "");
-  const [payoutMethod, setPayoutMethod] = useState("");
   const [notes, setNotes] = useState("");
   // card id -> { selected, amount (dollar string) }
   const [picks, setPicks] = useState<
     Record<string, { selected: boolean; amount: string }>
   >({});
-
-  const submitterCards = useMemo(
-    () => cards.filter((c) => c.submitterId === submitterId),
-    [cards, submitterId],
-  );
 
   const dollars = (cents: number | null) =>
     cents !== null ? (cents / 100).toFixed(2) : "";
@@ -64,23 +46,21 @@ export function NewOfferForm({
     }));
 
   const totalCents = useMemo(() => {
-    return submitterCards.reduce((sum, c) => {
+    return cards.reduce((sum, c) => {
       const p = picks[c.id];
       if (!p?.selected) return sum;
       const n = Number((p.amount || "0").replace(/[$,]/g, ""));
       return sum + (Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0);
     }, 0);
-  }, [submitterCards, picks]);
+  }, [cards, picks]);
 
-  const selectedCount = submitterCards.filter((c) => picks[c.id]?.selected).length;
+  const selectedCount = cards.filter((c) => picks[c.id]?.selected).length;
 
   const handleSubmit = () => {
     setError(null);
     const fd = new FormData();
-    fd.set("submitter_id", submitterId);
-    fd.set("payout_method", payoutMethod);
     fd.set("notes", notes);
-    submitterCards.forEach((c) => {
+    cards.forEach((c) => {
       const p = picks[c.id];
       if (p?.selected) {
         fd.set(`card_${c.id}`, "1");
@@ -96,51 +76,20 @@ export function NewOfferForm({
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col">
-          <label className={LABEL}>Submitter</label>
-          <select
-            value={submitterId}
-            onChange={(e) => setSubmitterId(e.target.value)}
-            className={`mt-1 ${INPUT}`}
-          >
-            <option value="">— choose —</option>
-            {submitters.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col">
-          <label className={LABEL}>Payout method</label>
-          <select
-            value={payoutMethod}
-            onChange={(e) => setPayoutMethod(e.target.value)}
-            className={`mt-1 ${INPUT}`}
-          >
-            <option value="">— not set —</option>
-            {PAYOUT_METHODS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <p className="border border-black/10 bg-black/[0.02] p-4 text-sm text-zinc-600 dark:border-white/15 dark:bg-white/[0.03] dark:text-zinc-400">
+        Pick the cards you want to sell us and set your asking price for each
+        (defaults to fair market value). Once we accept and your cards arrive,
+        we pay straight to your APEX wallet — withdraw it whenever you like.
+      </p>
 
-      {!submitterId ? (
+      {cards.length === 0 ? (
         <p className="border border-dashed border-black/20 p-8 text-center text-sm text-zinc-500 dark:border-white/20">
-          Choose a submitter to see the cards you can buy from them.
-        </p>
-      ) : submitterCards.length === 0 ? (
-        <p className="border border-dashed border-black/20 p-8 text-center text-sm text-zinc-500 dark:border-white/20">
-          This submitter has no available (unsold) cards. Intake one first, or
-          link an existing card to them.
+          You don&apos;t have any cards available to sell. Intake a card first,
+          then come back to make an offer.
         </p>
       ) : (
         <div className="border border-black/10 dark:border-white/15">
-          {submitterCards.map((c) => {
+          {cards.map((c) => {
             const p = picks[c.id];
             return (
               <div
@@ -176,11 +125,12 @@ export function NewOfferForm({
       )}
 
       <div>
-        <label className={LABEL}>Notes</label>
+        <label className={LABEL}>Notes (optional)</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
+          placeholder="Anything we should know about these cards?"
           className={`mt-1 w-full ${INPUT}`}
         />
       </div>
@@ -193,7 +143,7 @@ export function NewOfferForm({
 
       <div className="flex items-center justify-between border-t border-black/10 pt-5 dark:border-white/15">
         <p className="text-sm">
-          <span className={LABEL}>Offer total</span>
+          <span className={LABEL}>Asking total</span>
           <span className="ml-3 text-xl font-semibold tabular-nums">
             {formatMoneyCents(totalCents)}
           </span>

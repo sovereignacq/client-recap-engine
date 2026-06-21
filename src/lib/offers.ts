@@ -14,6 +14,7 @@ export const OFFER_STATUSES = [
 ] as const;
 
 export const PAYOUT_METHODS = [
+  { value: "wallet", label: "APEX wallet" },
   { value: "cash", label: "Cash" },
   { value: "paypal", label: "PayPal" },
   { value: "venmo", label: "Venmo" },
