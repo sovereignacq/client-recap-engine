@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { logout } from "@/app/login/actions";
-import { getRole, isStaff } from "@/lib/roles";
 import { ManageBillingButton } from "./billing-button";
 
 type SubRow = {
@@ -62,8 +60,6 @@ export default async function DashboardPage({
     .select("id", { count: "exact", head: true })
     .eq("owner_id", user.id);
 
-  const staff = isStaff(await getRole());
-
   const planLabel = subscription
     ? subscription.plan === "pro_annual"
       ? "Pro (annual)"
@@ -75,33 +71,13 @@ export default async function DashboardPage({
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-16">
       <div className="w-full max-w-3xl space-y-10">
-        <header className="flex items-center justify-between">
-          <div>
-            <p className="text-base font-bold uppercase tracking-[0.25em]">
-              APEX&nbsp;TCG
-            </p>
-            <p className="mt-1 text-sm text-zinc-500">
-              My collection · {profile?.full_name || profile?.email || user.email}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {staff && (
-              <Link
-                href="/admin"
-                className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-              >
-                Back office
-              </Link>
-            )}
-            <form action={logout}>
-              <button
-                type="submit"
-                className="rounded-none border border-black/20 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
-              >
-                Sign out
-              </button>
-            </form>
-          </div>
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            My collection
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            {profile?.full_name || profile?.email || user.email}
+          </p>
         </header>
 
         {params.checkout === "success" && (

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { cardTitle } from "@/lib/cards";
 import { getStripe } from "@/lib/stripe/server";
+import { isCurrentUserSuspended, SUSPENDED_MESSAGE } from "@/lib/account";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "https://client-recap-engine.vercel.app";
@@ -44,6 +45,8 @@ export async function openPackAction(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
+  if (await isCurrentUserSuspended())
+    return { ok: false, error: SUSPENDED_MESSAGE };
 
   const { data, error } = await supabase.rpc("open_pack", {
     p_tier: tierKey,
@@ -364,6 +367,8 @@ export async function requestWithdrawalAction(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
+  if (await isCurrentUserSuspended())
+    return { ok: false, error: SUSPENDED_MESSAGE };
   if (!Number.isFinite(amountCents) || amountCents < 500) {
     return { ok: false, error: "Minimum withdrawal is $5." };
   }
@@ -476,6 +481,8 @@ export async function dailyCheckinAction(): Promise<CheckinResult> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
+  if (await isCurrentUserSuspended())
+    return { ok: false, error: SUSPENDED_MESSAGE };
 
   const { data, error } = await supabase.rpc("daily_checkin");
   if (error) {
@@ -525,6 +532,8 @@ export async function dailySpinAction(): Promise<SpinResult> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in." };
+  if (await isCurrentUserSuspended())
+    return { ok: false, error: SUSPENDED_MESSAGE };
 
   const { data, error } = await supabase.rpc("daily_spin");
   if (error) {

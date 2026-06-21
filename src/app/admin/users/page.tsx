@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoneyCents } from "@/lib/cards";
 
@@ -6,7 +7,9 @@ export default async function AdminUsersPage() {
 
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, email, full_name, role, balance_cents, created_at")
+    .select(
+      "id, email, full_name, role, balance_cents, created_at, suspended_at, deleted_at",
+    )
     .order("created_at", { ascending: false });
 
   // Activity counts (small user base — count client-side from id lists).
@@ -50,13 +53,26 @@ export default async function AdminUsersPage() {
                 <th className="px-4 py-3 text-right">Cards</th>
                 <th className="px-4 py-3 text-right">Opens</th>
                 <th className="px-4 py-3 text-right">Joined</th>
+                <th className="px-4 py-3 text-right">Manage</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
                 <tr key={u.id} className="border-b border-black/10 last:border-0 dark:border-white/15">
                   <td className="px-4 py-3">
-                    <p className="font-medium">{u.email ?? "—"}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{u.email ?? "—"}</p>
+                      {u.suspended_at && (
+                        <span className="border border-amber-500/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-600 dark:text-amber-400">
+                          Suspended
+                        </span>
+                      )}
+                      {u.deleted_at && (
+                        <span className="border border-red-500/40 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-red-600 dark:text-red-400">
+                          Deleted
+                        </span>
+                      )}
+                    </div>
                     {u.full_name && (
                       <p className="text-xs text-zinc-500">{u.full_name}</p>
                     )}
@@ -81,6 +97,14 @@ export default async function AdminUsersPage() {
                   </td>
                   <td className="px-4 py-3 text-right text-zinc-500">
                     {new Date(u.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      href={`/admin/users/${u.id}`}
+                      className="text-[11px] font-medium uppercase tracking-[0.12em] underline-offset-4 hover:underline"
+                    >
+                      Manage →
+                    </Link>
                   </td>
                 </tr>
               ))}

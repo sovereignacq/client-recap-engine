@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getRole, isStaff } from "@/lib/roles";
+import { NavMenu } from "@/components/nav-menu";
 
 export default async function AdminLayout({
   children,
@@ -12,48 +13,50 @@ export default async function AdminLayout({
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b border-black/10 dark:border-white/15">
-        <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4 sm:px-6">
+      <header className="sticky top-0 z-40 border-b border-black/10 bg-white/85 backdrop-blur dark:border-white/15 dark:bg-black/85">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-baseline gap-3">
             <Link href="/admin" className="text-base font-bold uppercase tracking-[0.25em]">
               APEX&nbsp;TCG
             </Link>
-            <span className="text-[11px] uppercase tracking-[0.2em] text-zinc-400">
+            <span className="hidden text-[11px] uppercase tracking-[0.2em] text-zinc-400 sm:inline">
               Back office
             </span>
           </div>
-          <nav className="flex items-center gap-4 text-[11px] font-medium uppercase tracking-[0.15em]">
-            <Link href="/admin" className="text-zinc-500 hover:text-black dark:hover:text-white">
-              Overview
-            </Link>
-            <Link href="/admin/users" className="text-zinc-500 hover:text-black dark:hover:text-white">
-              Users
-            </Link>
-            <Link href="/admin/cards" className="text-zinc-500 hover:text-black dark:hover:text-white">
-              Submissions
-            </Link>
-            <Link href="/admin/inventory" className="text-zinc-500 hover:text-black dark:hover:text-white">
-              Inventory
-            </Link>
-            <Link href="/admin/offers" className="text-zinc-500 hover:text-black dark:hover:text-white">
-              Sell offers
-            </Link>
-            <Link href="/admin/withdrawals" className="text-zinc-500 hover:text-black dark:hover:text-white">
-              Withdrawals
-            </Link>
-            <Link href="/admin/economics" className="text-zinc-500 hover:text-black dark:hover:text-white">
-              Economics
-            </Link>
-            <Link href="/admin/archive" className="text-zinc-500 hover:text-black dark:hover:text-white">
-              Archive
-            </Link>
+          <div className="flex items-center gap-2">
+            <NavMenu
+              links={[{ label: "Overview", href: "/admin" }]}
+              groups={[
+                { label: "People", items: [{ label: "Users", href: "/admin/users" }] },
+                {
+                  label: "Cards",
+                  items: [
+                    { label: "Submissions", href: "/admin/cards" },
+                    { label: "Inventory", href: "/admin/inventory" },
+                    { label: "Archive", href: "/admin/archive" },
+                  ],
+                },
+                {
+                  label: "Orders",
+                  items: [
+                    { label: "Sell offers", href: "/admin/offers" },
+                    { label: "Withdrawals", href: "/admin/withdrawals" },
+                    { label: "Shipments", href: "/admin/shipments" },
+                  ],
+                },
+                {
+                  label: "Settings",
+                  items: [{ label: "Economics", href: "/admin/economics" }],
+                },
+              ]}
+            />
             <Link
               href="/dashboard"
-              className="rounded-none border border-black/20 px-3 py-1.5 hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
+              className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.15em] hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
             >
               My collection
             </Link>
-          </nav>
+          </div>
         </div>
       </header>
       {children}
