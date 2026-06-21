@@ -99,8 +99,13 @@ export function PoolSearch() {
                     No image
                   </div>
                 )}
-                <p className="truncate text-xs font-medium" title={c.name}>
-                  {c.name}
+                <p className="flex items-center gap-1 truncate text-xs font-medium" title={c.name}>
+                  {c.language && c.language !== "en" && (
+                    <span className="shrink-0 border border-rose-500/50 px-1 text-[8px] font-bold uppercase tracking-[0.1em] text-rose-600 dark:text-rose-400">
+                      {c.language}
+                    </span>
+                  )}
+                  <span className="truncate">{c.name}</span>
                 </p>
                 <p className="truncate text-[10px] text-zinc-500">
                   {c.setName} · {c.number}

@@ -76,6 +76,7 @@ export type PokemonSearchResult = {
   rarity: string;
   imageUrl: string | null;
   marketPriceCents: number | null;
+  language: string; // "en" | "ja" | …
 };
 
 function toSearchResult(c: ApiCard): PokemonSearchResult {
@@ -88,6 +89,7 @@ function toSearchResult(c: ApiCard): PokemonSearchResult {
     rarity: c.rarity ?? "",
     imageUrl: c.images?.large ?? c.images?.small ?? null,
     marketPriceCents: tcgplayerUsdCents(c),
+    language: "en",
   };
 }
 

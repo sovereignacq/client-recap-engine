@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
 import { PackCarousel } from "./pack-carousel";
+import { PackWheel } from "./pack-wheel";
 import {
   openPackAction,
+  packReelAction,
   topUpAction,
   sellBackAction,
   createDepositCheckoutAction,
@@ -234,31 +236,29 @@ export function BuyClient({
     });
   };
 
-  // Reveal suspense + value count-up
-  const [phase, setPhase] = useState<"charging" | "revealed">("revealed");
+  // Wheel-of-fortune reveal: spin → land → value count-up
+  const [phase, setPhase] = useState<"wheel" | "revealed">("revealed");
+  const [reel, setReel] = useState<string[]>([]);
   const [displayCents, setDisplayCents] = useState(0);
   const rafRef = useRef<number | null>(null);
 
+  // Count the value up once the wheel has landed (phase flips to revealed).
   useEffect(() => {
-    if (!result) return;
-    const timer = setTimeout(() => {
-      setPhase("revealed");
-      const target = result.fmvCents;
-      const start = performance.now();
-      const dur = 750;
-      const tick = (now: number) => {
-        const p = Math.min(1, (now - start) / dur);
-        const eased = 1 - Math.pow(1 - p, 3);
-        setDisplayCents(Math.round(target * eased));
-        if (p < 1) rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    }, 1100);
+    if (!result || phase !== "revealed") return;
+    const target = result.fmvCents;
+    const start = performance.now();
+    const dur = 750;
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setDisplayCents(Math.round(target * eased));
+      if (p < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
     return () => {
-      clearTimeout(timer);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [result]);
+  }, [result, phase]);
 
   const [modeKey, setModeKey] = useState(modes[0]?.key ?? "normal");
   const mode = useMemo(
@@ -277,15 +277,19 @@ export function BuyClient({
     setError(null);
     setOpeningKey(tier.key);
     startOpen(async () => {
-      const r = await openPackAction(tier.key, modeKey, categoryKey);
+      const [r, reelImgs] = await Promise.all([
+        openPackAction(tier.key, modeKey, categoryKey),
+        packReelAction(tier.key),
+      ]);
       setOpeningKey(null);
       if (r.ok) {
         setBalance(r.balanceAfter);
         setPity((p) => ({ ...p, [`${categoryKey}:${tier.key}`]: r.pityCount }));
         setSold(false);
-        setPhase("charging");
+        setReel(reelImgs);
         setDisplayCents(0);
         setResult(r);
+        setPhase("wheel");
       } else {
         setError(r.error);
       }
@@ -1041,12 +1045,14 @@ export function BuyClient({
             className="w-full max-w-sm overflow-hidden border border-white/15 bg-black p-8 text-center text-white"
             onClick={(e) => e.stopPropagation()}
           >
-            {phase === "charging" ? (
-              <div className="flex flex-col items-center py-6">
-                <div className="h-28 w-20 animate-pulse rounded-sm bg-gradient-to-br from-zinc-700 via-zinc-500 to-zinc-800 shadow-[0_0_40px_rgba(255,255,255,0.25)]" />
-                <p className="mt-6 animate-pulse text-[11px] uppercase tracking-[0.4em] text-zinc-400">
-                  Opening…
-                </p>
+            {phase === "wheel" ? (
+              <div className="py-2">
+                <PackWheel
+                  reel={reel}
+                  wonImage={result.imageUrl}
+                  wonLabel={result.title}
+                  onLanded={() => setPhase("revealed")}
+                />
               </div>
             ) : (
               <div className="animate-[fadeIn_300ms_ease-out]">
@@ -1066,6 +1072,14 @@ export function BuyClient({
                 >
                   {OUTCOME_LABEL[result.outcome]}
                 </p>
+                {result.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={result.imageUrl}
+                    alt={result.title}
+                    className="mx-auto mt-4 h-44 w-auto rounded-sm border border-white/15 object-contain"
+                  />
+                )}
                 <h3 className="mt-4 text-lg font-semibold">{result.title}</h3>
                 <p className="mt-1 font-mono text-xs text-zinc-400">{result.serial}</p>
                 {result.grade && <p className="mt-1 text-sm text-zinc-300">{result.grade}</p>}
