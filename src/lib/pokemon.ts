@@ -68,6 +68,59 @@ async function queryApi(q: string, signal: AbortSignal): Promise<ApiCard[]> {
   return json.data ?? [];
 }
 
+export type PokemonSearchResult = {
+  id: string;
+  name: string;
+  setName: string;
+  number: string; // e.g. "4/102"
+  rarity: string;
+  imageUrl: string | null;
+  marketPriceCents: number | null;
+};
+
+function toSearchResult(c: ApiCard): PokemonSearchResult {
+  const printedTotal = c.set?.printedTotal;
+  return {
+    id: c.id,
+    name: c.name,
+    setName: c.set?.name ?? "",
+    number: printedTotal ? `${c.number}/${printedTotal}` : c.number,
+    rarity: c.rarity ?? "",
+    imageUrl: c.images?.large ?? c.images?.small ?? null,
+    marketPriceCents: tcgplayerUsdCents(c),
+  };
+}
+
+/**
+ * Free-text search of the Pokémon card database for the "search & add" flow.
+ * Each token is matched as a name prefix, so "char" or "charizard ex" both work.
+ * Returns up to ~12 candidates with image + real market price.
+ */
+export async function searchPokemonCards(
+  query: string,
+): Promise<PokemonSearchResult[]> {
+  const q = query.trim();
+  if (!q) return [];
+
+  const tokens = q
+    .split(/\s+/)
+    .map((t) => t.replace(/[^a-z0-9]/gi, ""))
+    .filter(Boolean);
+  if (!tokens.length) return [];
+  const nameQ = tokens.map((t) => `name:${t}*`).join(" ");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const cards = await queryApi(nameQ, controller.signal);
+    return cards.map(toSearchResult);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function lookupPokemonCard(input: {
   name: string;
   number: string | null;

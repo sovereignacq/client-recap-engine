@@ -44,7 +44,7 @@ export function NavMenu({
   }, []);
 
   return (
-    <div ref={ref} className={`flex items-center gap-1 ${className}`}>
+    <div ref={ref} className={`flex flex-wrap items-center gap-x-1 gap-y-0.5 ${className}`}>
       {links.map((l) => (
         <Link key={l.href} href={l.href} className={LINK}>
           {l.label}
