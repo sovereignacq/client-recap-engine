@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { cardTitle, labelFor, CARD_STATUSES } from "@/lib/cards";
+import { AdminArchiveControl } from "../cards/[id]/archive-control";
 
 export default async function AdminArchivePage() {
   const supabase = await createClient();
@@ -37,24 +38,23 @@ export default async function AdminArchivePage() {
         {cards && cards.length > 0 ? (
           <ul className="border border-black/10 dark:border-white/15">
             {cards.map((c) => (
-              <li key={c.id} className="border-b border-black/10 last:border-0 dark:border-white/15">
+              <li
+                key={c.id}
+                className="flex items-center justify-between gap-3 border-b border-black/10 px-5 py-4 last:border-0 dark:border-white/15"
+              >
                 <Link
                   href={`/admin/cards/${c.id}`}
-                  className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-950"
+                  className="min-w-0 flex-1 transition"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{cardTitle(c)}</p>
-                    <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-zinc-500">
-                      <span className="font-mono normal-case tracking-normal">{c.serial}</span>
-                      {" · "}
-                      {labelFor(CARD_STATUSES, c.status)}
-                      {emailById.get(c.owner_id) ? ` · ${emailById.get(c.owner_id)}` : ""}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-zinc-400">
-                    {c.archived_at ? new Date(c.archived_at).toLocaleDateString() : ""}
-                  </span>
+                  <p className="truncate font-medium">{cardTitle(c)}</p>
+                  <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-zinc-500">
+                    <span className="font-mono normal-case tracking-normal">{c.serial}</span>
+                    {" · "}
+                    {labelFor(CARD_STATUSES, c.status)}
+                    {emailById.get(c.owner_id) ? ` · ${emailById.get(c.owner_id)}` : ""}
+                  </p>
                 </Link>
+                <AdminArchiveControl cardId={c.id} archived={true} />
               </li>
             ))}
           </ul>

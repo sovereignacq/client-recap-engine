@@ -65,7 +65,7 @@ export function PackCarousel({
   return (
     <div className="space-y-6">
       {/* Lazy-Susan carousel */}
-      <div className="relative mx-auto h-[260px] w-full max-w-3xl [perspective:1200px]">
+      <div className="relative mx-auto h-[260px] w-full max-w-3xl overflow-hidden [perspective:1200px]">
         {tiers.map((t, i) => {
           const offset = i - sel;
           const abs = Math.abs(offset);
