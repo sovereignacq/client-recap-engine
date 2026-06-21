@@ -144,14 +144,18 @@ export async function adminToggleInventory(
 ): Promise<{ error?: string } | void> {
   if (!isStaff(await getRole())) return { error: "Not authorized." };
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("cards")
-    .update({
-      in_inventory: inInventory,
-      status: inInventory ? "inventory" : "graded",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", cardId);
+  const patch: Record<string, unknown> = {
+    in_inventory: inInventory,
+    status: inInventory ? "inventory" : "graded",
+    updated_at: new Date().toISOString(),
+  };
+  // open_pack only draws pool cards owned by the house owner, so reassign the
+  // card to the owner when it joins the pool (otherwise it can't be pulled).
+  if (inInventory) {
+    const { data: ownerUuid } = await supabase.rpc("app_owner_id");
+    if (typeof ownerUuid === "string" && ownerUuid) patch.owner_id = ownerUuid;
+  }
+  const { error } = await supabase.from("cards").update(patch).eq("id", cardId);
   if (error) return { error: error.message };
   revalidatePath("/admin/inventory");
   revalidatePath("/admin");
