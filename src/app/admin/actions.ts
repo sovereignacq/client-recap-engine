@@ -238,6 +238,19 @@ export async function adminDeleteUser(
   const supabase = await createClient();
   const { error } = await supabase.rpc("admin_delete_user", { p_user: userId });
   if (error) return { error: error.message };
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+}
+
+/** Restore a soft-deleted account (clears deletion + the delete suspension). */
+export async function adminRestoreUser(
+  userId: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_restore_user", { p_user: userId });
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");
 }
 
