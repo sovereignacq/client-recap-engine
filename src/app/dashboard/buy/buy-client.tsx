@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
 import { PackCarousel } from "./pack-carousel";
 import { PackWheel } from "./pack-wheel";
+import { ResetTimer } from "./reset-timer";
 import {
   openPackAction,
   packReelAction,
@@ -46,6 +47,8 @@ export type Tier = {
   priceCents: number;
   odds: Bucket[];
   pityThreshold: number;
+  pullMinCents: number | null;
+  pullMaxCents: number | null;
 };
 export type Mode = {
   key: string;
@@ -125,6 +128,8 @@ export function BuyClient({
   spinPrizes,
   checkin: initialCheckin,
   spinClaimable: initialSpinClaimable,
+  checkinNextAt,
+  spinNextAt,
   emailVerified,
   referralCode,
   referralUrl,
@@ -150,6 +155,8 @@ export function BuyClient({
   spinPrizes: SpinPrize[];
   checkin: { claimable: boolean; streak: number; total: number };
   spinClaimable: boolean;
+  checkinNextAt: string | null;
+  spinNextAt: string | null;
   emailVerified: boolean;
   referralCode: string;
   referralUrl: string;
@@ -706,6 +713,14 @@ export function BuyClient({
             <p className="text-[11px] text-zinc-500">
               7 days = free pack · 30 = bigger pack
             </p>
+            {!checkin.claimable && checkinNextAt && (
+              <p className="mt-1 text-[11px] text-zinc-400">
+                <ResetTimer
+                  nextAt={checkinNextAt}
+                  onElapsed={() => router.refresh()}
+                />
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -724,6 +739,14 @@ export function BuyClient({
             <p className="mt-1 text-sm text-zinc-500">
               One free spin a day — cash or a pack.
             </p>
+            {!spinAvailable && spinNextAt && (
+              <p className="mt-1 text-[11px] text-zinc-400">
+                <ResetTimer
+                  nextAt={spinNextAt}
+                  onElapsed={() => router.refresh()}
+                />
+              </p>
+            )}
           </div>
           <button
             type="button"

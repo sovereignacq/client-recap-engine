@@ -22,6 +22,15 @@ export default async function LoginPage({
   return (
     <main className="flex flex-1 items-center justify-center px-4 py-16">
       <div className="w-full max-w-sm space-y-6">
+        <div className="text-center">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 rounded-none border border-black/20 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.18em] transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
+          >
+            ← Home
+          </Link>
+        </div>
+
         <div className="space-y-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">

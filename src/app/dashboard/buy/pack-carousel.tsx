@@ -54,12 +54,10 @@ export function PackCarousel({
     w: b.weight * (mode?.weightMults?.[b.key] ?? 1),
   }));
   const total = adj.reduce((s, b) => s + b.w, 0) || 1;
-  const minCents = Math.round(
-    Math.min(...tier.odds.map((b) => b.min_mult)) * effPrice,
-  );
-  const maxCents = Math.round(
-    Math.max(...tier.odds.map((b) => b.max_mult)) * effPrice,
-  );
+  // The pull range is the tier's absolute value band (what cards can be won),
+  // NOT a multiple of the pack price.
+  const minCents = tier.pullMinCents ?? 0;
+  const maxCents = tier.pullMaxCents ?? effPrice;
   const pityCount = pity[`${categoryKey}:${tier.key}`] ?? 0;
   const pityPct = Math.min(100, (pityCount / tier.pityThreshold) * 100);
   const canAfford = balance >= effPrice;

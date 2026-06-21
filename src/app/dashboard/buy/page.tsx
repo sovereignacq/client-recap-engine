@@ -35,7 +35,7 @@ export default async function BuyPage() {
 
   const { data: tierRows } = await supabase
     .from("pack_tiers")
-    .select("key, name, price_cents, odds, pity_threshold")
+    .select("key, name, price_cents, odds, pity_threshold, pull_min_cents, pull_max_cents")
     .eq("active", true)
     .order("sort_order", { ascending: true });
 
@@ -45,6 +45,8 @@ export default async function BuyPage() {
     priceCents: t.price_cents,
     odds: (t.odds as Tier["odds"]) ?? [],
     pityThreshold: t.pity_threshold ?? 10,
+    pullMinCents: t.pull_min_cents ?? null,
+    pullMaxCents: t.pull_max_cents ?? null,
   }));
 
   const { data: modeRows } = await supabase
@@ -104,6 +106,19 @@ export default async function BuyPage() {
   const spinClaimable =
     !profile?.last_spin_at ||
     nowMs - new Date(profile.last_spin_at).getTime() >= COOLDOWN_MS;
+  // When each reward unlocks again (ISO), or null if it's claimable now.
+  const checkinNextAt =
+    !checkinClaimable && profile?.last_checkin_at
+      ? new Date(
+          new Date(profile.last_checkin_at).getTime() + COOLDOWN_MS,
+        ).toISOString()
+      : null;
+  const spinNextAt =
+    !spinClaimable && profile?.last_spin_at
+      ? new Date(
+          new Date(profile.last_spin_at).getTime() + COOLDOWN_MS,
+        ).toISOString()
+      : null;
 
   // Referral identity + share link, plus how many referrals have paid off.
   const referralCode = profile?.referral_code ?? "";
@@ -250,6 +265,8 @@ export default async function BuyPage() {
             total: profile?.checkin_total ?? 0,
           }}
           spinClaimable={spinClaimable}
+          checkinNextAt={checkinNextAt}
+          spinNextAt={spinNextAt}
           emailVerified={emailVerified}
           referralCode={referralCode}
           referralUrl={referralUrl}
