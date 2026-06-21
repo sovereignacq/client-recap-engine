@@ -17,10 +17,12 @@ export function SubmitGrading({
   cardId,
   fmvCents,
   companies,
+  discountPct = 0,
 }: {
   cardId: string;
   fmvCents: number | null;
   companies: Company[];
+  discountPct?: number;
 }) {
   const [company, setCompany] = useState(companies[0]?.key ?? "");
   const [turnaround, setTurnaround] = useState("standard");
@@ -32,10 +34,12 @@ export function SubmitGrading({
   const [error, setError] = useState<string | null>(null);
 
   const valueCents = Math.round((parseFloat(valueDollars) || 0) * 100);
-  const fee = useMemo(
+  const baseFee = useMemo(
     () => gradingServiceFeeCents(valueCents, turnaround),
     [valueCents, turnaround],
   );
+  const fee =
+    discountPct > 0 ? Math.round(baseFee * (1 - discountPct / 100)) : baseFee;
 
   if (companies.length === 0) {
     return (
@@ -130,8 +134,16 @@ export function SubmitGrading({
       </div>
 
       <div className="flex items-center justify-between border-t border-black/10 pt-3 text-sm dark:border-white/15">
-        <span className="text-zinc-500">APEX service fee</span>
+        <span className="text-zinc-500">
+          APEX service fee
+          {discountPct > 0 ? ` · ${discountPct}% member discount` : ""}
+        </span>
         <span className="font-semibold tabular-nums">
+          {discountPct > 0 && (
+            <span className="mr-2 font-normal text-zinc-400 line-through">
+              {formatMoneyCents(baseFee)}
+            </span>
+          )}
           {formatMoneyCents(fee)}
         </span>
       </div>

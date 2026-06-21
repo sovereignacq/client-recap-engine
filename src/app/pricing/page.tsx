@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { MembershipButton } from "./membership-button";
 
 export const metadata = {
   title: "Pricing",
@@ -161,16 +162,22 @@ export default async function PricingPage() {
                   >
                     {user ? "Go to dashboard" : "Start free"}
                   </Link>
+                ) : user ? (
+                  <MembershipButton
+                    planKey={tier.key as "collector" | "dealer"}
+                    label={`Choose ${tier.name}`}
+                    featured={tier.featured}
+                  />
                 ) : (
                   <Link
-                    href={user ? "/dashboard" : "/signup?next=/pricing"}
+                    href={`/signup?next=/pricing`}
                     className={
                       tier.featured
                         ? "block w-full rounded-none bg-white px-4 py-3 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-black transition hover:bg-zinc-200 dark:bg-black dark:text-white dark:hover:bg-zinc-800"
                         : BTN_OUTLINE
                     }
                   >
-                    {user ? "Choose " + tier.name : "Start free"}
+                    Sign up to join
                   </Link>
                 )}
               </div>
@@ -179,8 +186,8 @@ export default async function PricingPage() {
         </section>
 
         <p className="-mt-12 text-center text-xs text-zinc-500">
-          Paid memberships are rolling out — start free today and upgrade from
-          your dashboard when they go live.
+          Memberships bill annually and renew automatically. Cancel anytime in
+          your billing portal.
         </p>
 
         {/* GRADING FEE SCHEDULE */}
