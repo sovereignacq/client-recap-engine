@@ -157,6 +157,105 @@ export async function adminToggleInventory(
   revalidatePath("/admin");
 }
 
+// ============ User management (staff/owner) ============
+
+/** Credit (positive) or debit (negative) a user's wallet, in cents. */
+export async function adminAdjustBalance(
+  userId: string,
+  deltaCents: number,
+  reason: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  if (!Number.isFinite(deltaCents) || deltaCents === 0) {
+    return { error: "Enter a non-zero amount." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_adjust_balance", {
+    p_user: userId,
+    p_delta: Math.round(deltaCents),
+    p_reason: reason || null,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+}
+
+export async function adminSetSuspended(
+  userId: string,
+  suspend: boolean,
+  reason?: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_set_suspended", {
+    p_user: userId,
+    p_suspend: suspend,
+    p_reason: reason ?? null,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+}
+
+export async function adminIssueWarning(
+  userId: string,
+  reason: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  if (!reason?.trim()) return { error: "A reason is required." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_issue_warning", {
+    p_user: userId,
+    p_reason: reason.trim(),
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/users/${userId}`);
+}
+
+export async function adminSetRole(
+  userId: string,
+  role: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_set_role", {
+    p_user: userId,
+    p_role: role,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+}
+
+export async function adminDeleteUser(
+  userId: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_delete_user", { p_user: userId });
+  if (error) return { error: error.message };
+  revalidatePath("/admin/users");
+}
+
+/** Advance a shipment through packed → shipped (with tracking) → delivered. */
+export async function adminUpdateShipment(
+  id: string,
+  status: string,
+  carrier?: string,
+  tracking?: string,
+): Promise<{ error?: string } | void> {
+  if (!isStaff(await getRole())) return { error: "Not authorized." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_update_shipment", {
+    p_id: id,
+    p_status: status,
+    p_carrier: carrier ?? null,
+    p_tracking: tracking ?? null,
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/admin/shipments");
+}
+
 export async function adminUpdateCardStatus(
   cardId: string,
   status: string,

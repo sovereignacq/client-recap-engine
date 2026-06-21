@@ -29,3 +29,43 @@ body {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
 }
+
+/* ---- Holographic trading-card art (no copyrighted imagery) ---- */
+@keyframes holoShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+  50% { transform: translateY(-10px) rotate(var(--tilt, 0deg)); }
+}
+@keyframes sheen {
+  0% { transform: translateX(-120%) skewX(-18deg); }
+  60%, 100% { transform: translateX(220%) skewX(-18deg); }
+}
+
+.holo-card {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    linear-gradient(125deg,
+      #ff5f6d 0%, #ffc371 18%, #34e89e 38%,
+      #0f3443 58%, #7028e4 78%, #e94057 100%);
+  background-size: 300% 300%;
+  animation: holoShift 6s ease infinite;
+  box-shadow: 0 24px 60px -20px rgba(0,0,0,0.55);
+}
+.holo-card::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+  animation: sheen 4.5s ease-in-out infinite;
+}
+.card-float { animation: cardFloat 7s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .holo-card, .holo-card::after, .card-float { animation: none; }
+}

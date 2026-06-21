@@ -510,3 +510,51 @@ export async function deleteCardAction(cardId: string): Promise<void> {
   revalidatePath("/dashboard");
   redirect("/dashboard/cards");
 }
+
+export type ShipResult =
+  | { ok: true; balanceAfter: number }
+  | { ok: false; error: string };
+
+/** Request a physical, insured shipment of a card the user owns (flat fee). */
+export async function requestShipmentAction(
+  cardId: string,
+  address: {
+    recipient: string;
+    address1: string;
+    address2?: string;
+    city: string;
+    region: string;
+    postal: string;
+    country?: string;
+  },
+): Promise<ShipResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const { data, error } = await supabase.rpc("request_card_shipment", {
+    p_card_id: cardId,
+    p_recipient: address.recipient,
+    p_address1: address.address1,
+    p_address2: address.address2 ?? null,
+    p_city: address.city,
+    p_region: address.region,
+    p_postal: address.postal,
+    p_country: address.country ?? "US",
+  });
+  if (error) {
+    const msg = /suspended/i.test(error.message)
+      ? "Your account is suspended — shipping is paused."
+      : /not enough wallet/i.test(error.message)
+        ? "Not enough wallet balance for the $14.99 shipping fee."
+        : /already in transit/i.test(error.message)
+          ? "This card is already on its way or sold."
+          : error.message;
+    return { ok: false, error: msg };
+  }
+  revalidatePath("/dashboard/cards");
+  const d = data as { balance_after: number };
+  return { ok: true, balanceAfter: d.balance_after };
+}

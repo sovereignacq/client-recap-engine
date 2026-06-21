@@ -69,3 +69,33 @@ export function formatMoneyCents(
     currency,
   }).format(cents / 100);
 }
+
+/** Extra card statuses used outside the manual status control (pool + shipping). */
+const EXTRA_STATUS_LABELS: Record<string, string> = {
+  inventory: "In pack pool",
+  shipping: "Shipping",
+  shipped: "Shipped to you",
+};
+
+/** Human label for any card status, including pool/shipping states. */
+export function cardStatusLabel(value: string | null | undefined): string {
+  if (!value) return "—";
+  return (
+    (CARD_STATUSES as ReadonlyArray<{ value: string; label: string }>).find(
+      (o) => o.value === value,
+    )?.label ??
+    EXTRA_STATUS_LABELS[value] ??
+    value
+  );
+}
+
+/** Flat insured shipping fee (cents) to physically send a card to its owner. */
+export const SHIPPING_FEE_CENTS = 1499;
+
+export const SHIPMENT_STATUSES = [
+  { value: "requested", label: "Requested" },
+  { value: "packed", label: "Packed" },
+  { value: "shipped", label: "Shipped" },
+  { value: "delivered", label: "Delivered" },
+  { value: "canceled", label: "Canceled" },
+] as const;

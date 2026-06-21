@@ -5,9 +5,10 @@ import {
   cardTitle,
   formatMoneyCents,
   labelFor,
-  CARD_STATUSES,
+  cardStatusLabel,
   ID_STATUSES,
 } from "@/lib/cards";
+import { ShipCard } from "./ship-card";
 
 type CardRow = {
   id: string;
@@ -47,6 +48,23 @@ export default async function CardsListPage() {
     submitter: Array.isArray(c.submitter) ? (c.submitter[0] ?? null) : c.submitter,
   })) as CardRow[];
 
+  // Shipment status for any of these cards the user has asked us to mail.
+  const { data: shipRows } = await supabase
+    .from("card_shipments")
+    .select("card_id, status, carrier, tracking_number")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+  const shipByCard = new Map<
+    string,
+    { status: string; carrier: string | null; tracking_number: string | null }
+  >();
+  (shipRows ?? []).forEach((s) => {
+    if (!shipByCard.has(s.card_id)) shipByCard.set(s.card_id, s);
+  });
+
+  // Cards eligible for a ship-to-me request: owned, not in transit/sold/pooled.
+  const SHIP_BLOCKED = new Set(["shipping", "shipped", "sold", "inventory"]);
+
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-14">
       <div className="w-full max-w-4xl space-y-8">
@@ -73,31 +91,48 @@ export default async function CardsListPage() {
 
         {cards.length > 0 ? (
           <ul className="border border-black/10 dark:border-white/15">
-            {cards.map((c) => (
-              <li key={c.id} className="border-b border-black/10 last:border-0 dark:border-white/15">
-                <Link
-                  href={`/dashboard/cards/${c.id}`}
-                  className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-950"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{cardTitle(c)}</p>
-                    <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-zinc-500">
-                      <span className="font-mono normal-case tracking-normal">
-                        {c.serial}
-                      </span>{" "}
-                      · {labelFor(CARD_STATUSES, c.status)}
-                      {c.submitter?.name ? ` · ${c.submitter.name}` : ""}
-                      {c.id_status !== "confirmed"
-                        ? ` · ${labelFor(ID_STATUSES, c.id_status)}`
+            {cards.map((c) => {
+              const ship = shipByCard.get(c.id);
+              return (
+                <li key={c.id} className="border-b border-black/10 last:border-0 dark:border-white/15">
+                  <Link
+                    href={`/dashboard/cards/${c.id}`}
+                    className="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-zinc-50 dark:hover:bg-zinc-950"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{cardTitle(c)}</p>
+                      <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-zinc-500">
+                        <span className="font-mono normal-case tracking-normal">
+                          {c.serial}
+                        </span>{" "}
+                        · {cardStatusLabel(c.status)}
+                        {c.submitter?.name ? ` · ${c.submitter.name}` : ""}
+                        {c.id_status !== "confirmed"
+                          ? ` · ${labelFor(ID_STATUSES, c.id_status)}`
+                          : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm tabular-nums text-zinc-600 dark:text-zinc-400">
+                      {formatMoneyCents(c.fmv_cents, c.fmv_currency)}
+                    </span>
+                  </Link>
+
+                  {ship ? (
+                    <p className="px-5 pb-4 text-[11px] uppercase tracking-[0.1em] text-zinc-500">
+                      Delivery:{" "}
+                      <span className="font-medium text-black dark:text-white">
+                        {ship.status}
+                      </span>
+                      {ship.tracking_number
+                        ? ` · ${ship.carrier ?? "tracking"} ${ship.tracking_number}`
                         : ""}
                     </p>
-                  </div>
-                  <span className="shrink-0 text-sm tabular-nums text-zinc-600 dark:text-zinc-400">
-                    {formatMoneyCents(c.fmv_cents, c.fmv_currency)}
-                  </span>
-                </Link>
-              </li>
-            ))}
+                  ) : SHIP_BLOCKED.has(c.status) ? null : (
+                    <ShipCard cardId={c.id} />
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <div className="border border-dashed border-black/20 p-16 text-center dark:border-white/20">
