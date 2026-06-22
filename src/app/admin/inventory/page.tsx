@@ -86,6 +86,15 @@ export default async function AdminInventoryPage() {
           </Link>
         </div>
 
+        <div>
+          <Link
+            href="/admin/hotlist"
+            className="inline-block border border-black/15 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            🔥 Hotlist — what to stock per band →
+          </Link>
+        </div>
+
         <PoolSearch />
 
         <section className="space-y-3">

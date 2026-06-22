@@ -144,6 +144,120 @@ export async function poolStockAction(
   return out;
 }
 
+/** Staff: trigger a refresh of the trend scores (Wikipedia pageviews + YouTube). */
+export async function refreshTrendsAction(): Promise<{ ok: boolean; error?: string }> {
+  if (!isStaff(await getRole())) return { ok: false, error: "Not authorized." };
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return { ok: false, error: "Supabase URL not configured." };
+  try {
+    const r = await fetch(`${base}/functions/v1/refresh-trends`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const j = (await r.json().catch(() => ({}))) as { ok?: boolean };
+    revalidatePath("/admin/hotlist");
+    return { ok: !!j.ok };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Refresh failed." };
+  }
+}
+
+type HotlistPick = {
+  tierKey: string;
+  tierName: string;
+  bandLabel: string;
+  loCents: number;
+  hiCents: number;
+  catalogId: string;
+  name: string;
+  setName: string;
+  number: string;
+  rarity: string;
+  imageUrl: string | null;
+  marketCents: number;
+  poolCnt: number;
+  trending: boolean;
+  trendScore: number;
+};
+
+/**
+ * Staff: sourcing hotlist of sought-after cards to acquire, per tier band.
+ * Candidates come from inventory_hotlist (chase rarity + value within band),
+ * then re-ranked by live trend scores (Wikipedia pageviews + YouTube) so the
+ * picks favour what's currently trending.
+ */
+export async function getHotlistAction(perBand = 3): Promise<HotlistPick[]> {
+  if (!isStaff(await getRole())) return [];
+  const supabase = await createClient();
+  const candidates = Math.max(8, perBand * 3);
+
+  const [{ data, error }, { data: trendRows }] = await Promise.all([
+    supabase.rpc("inventory_hotlist", { p_per_band: candidates }),
+    supabase.from("trend_scores").select("species, score"),
+  ]);
+  if (error || !Array.isArray(data)) return [];
+
+  const trends = (trendRows ?? []).map((t) => ({
+    species: (t.species as string).toLowerCase(),
+    score: Number(t.score),
+  }));
+  const trendFor = (name: string): number => {
+    const n = name.toLowerCase();
+    let best = 0;
+    for (const t of trends) if (n.includes(t.species) && t.score > best) best = t.score;
+    return best;
+  };
+
+  type Row = {
+    tier_key: string; tier_name: string; band_label: string;
+    lo_cents: number; hi_cents: number; catalog_id: string; name: string;
+    set_name: string | null; number: string | null; rarity: string | null;
+    image_url: string | null; market_cents: number; score: number; pool_cnt: number;
+  };
+
+  const picks = (data as Row[]).map((r) => {
+    const trendScore = trendFor(r.name);
+    return {
+      tierKey: r.tier_key,
+      tierName: r.tier_name,
+      bandLabel: r.band_label,
+      loCents: r.lo_cents,
+      hiCents: r.hi_cents,
+      catalogId: r.catalog_id,
+      name: r.name,
+      setName: r.set_name ?? "",
+      number: r.number ?? "",
+      rarity: r.rarity ?? "",
+      imageUrl: r.image_url,
+      marketCents: r.market_cents,
+      poolCnt: r.pool_cnt,
+      trending: trendScore >= 40,
+      trendScore,
+      // Combined rank: base desirability (rarity/value) + weighted trend.
+      _rank: Number(r.score) + trendScore * 1.2,
+    };
+  });
+
+  // Re-rank within each tier+band and keep the top `perBand`.
+  const grouped = new Map<string, typeof picks>();
+  for (const p of picks) {
+    const k = `${p.tierKey}|${p.bandLabel}`;
+    const arr = grouped.get(k) ?? [];
+    arr.push(p);
+    grouped.set(k, arr);
+  }
+  const out: HotlistPick[] = [];
+  for (const arr of grouped.values()) {
+    arr.sort((a, b) => b._rank - a._rank);
+    for (const p of arr.slice(0, perBand)) {
+      const { _rank, ...rest } = p;
+      void _rank;
+      out.push(rest);
+    }
+  }
+  return out;
+}
+
 const GRADING_COMPANIES = ["PSA", "BGS", "CGC", "SGC", "TAG", "Other"];
 
 /** Staff: stock a graded slab into the pack pool so it can be won in Apex Play. */
