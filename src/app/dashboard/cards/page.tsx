@@ -25,6 +25,9 @@ type CardRow = {
   card_number: string | null;
   variant: string | null;
   image_url: string | null;
+  is_slab: boolean;
+  grading_company: string | null;
+  grade: string | null;
   won_at: string | null;
   decided_at: string | null;
   submitter: { name: string } | null;
@@ -41,7 +44,7 @@ export default async function CardsListPage() {
   const { data } = await supabase
     .from("cards")
     .select(
-      "id, serial, status, id_status, fmv_cents, fmv_currency, card_year, manufacturer, set_name, player_or_character, card_number, variant, image_url, won_at, decided_at, created_at, submitter:submitters(name)",
+      "id, serial, status, id_status, fmv_cents, fmv_currency, card_year, manufacturer, set_name, player_or_character, card_number, variant, image_url, is_slab, grading_company, grade, won_at, decided_at, created_at, submitter:submitters(name)",
     )
     .eq("owner_id", user.id)
     .is("archived_at", null)
@@ -130,7 +133,14 @@ export default async function CardsListPage() {
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{cardTitle(c)}</p>
+                      <p className="flex items-center gap-2 truncate font-medium">
+                        <span className="truncate">{cardTitle(c)}</span>
+                        {c.is_slab && (
+                          <span className="shrink-0 rounded-none border border-amber-500/50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-amber-600 dark:text-amber-400">
+                            {[c.grading_company, c.grade].filter(Boolean).join(" ") || "Slab"}
+                          </span>
+                        )}
+                      </p>
                       <p className="mt-0.5 text-[11px] uppercase tracking-[0.1em] text-zinc-500">
                         <span className="font-mono normal-case tracking-normal">
                           {c.serial}

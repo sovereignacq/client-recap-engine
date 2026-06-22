@@ -14,6 +14,9 @@ type Item = {
   language: string;
   unit_cents: number;
   quantity: number;
+  is_slab: boolean;
+  grading_company: string | null;
+  grade: string | null;
 };
 
 export default async function CollectionDetailPage({
@@ -102,13 +105,21 @@ export default async function CollectionDetailPage({
                   <div className="h-14 w-10 shrink-0 bg-black/5 dark:bg-white/10" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {i.language !== "en" ? `[${i.language}] ` : ""}
-                    {i.name}
-                    {i.quantity > 1 ? ` ×${i.quantity}` : ""}
+                  <p className="flex items-center gap-2 truncate text-sm font-medium">
+                    <span className="truncate">
+                      {i.language !== "en" ? `[${i.language}] ` : ""}
+                      {i.name}
+                      {i.quantity > 1 ? ` ×${i.quantity}` : ""}
+                    </span>
+                    {i.is_slab && (
+                      <span className="shrink-0 rounded-none border border-amber-500/50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-amber-600 dark:text-amber-400">
+                        {[i.grading_company, i.grade].filter(Boolean).join(" ") ||
+                          "Slab"}
+                      </span>
+                    )}
                   </p>
                   <p className="text-[11px] uppercase tracking-[0.1em] text-zinc-500">
-                    {i.kind === "apex" ? "APEX card" : "Physical"}
+                    {i.is_slab ? "Slab" : i.kind === "apex" ? "APEX card" : "Physical"}
                     {i.set_name ? ` · ${i.set_name}` : ""}
                   </p>
                 </div>

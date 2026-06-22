@@ -97,6 +97,87 @@ export async function addPhysicalCardAction(
   revalidatePath(`/dashboard/collections/${collectionId}`);
 }
 
+const GRADING_COMPANIES = ["PSA", "BGS", "CGC", "SGC", "TAG", "Other"];
+
+/**
+ * Add a slab (graded card) the player owns: pick the card identity from the
+ * catalog, then record the grading company, grade and cert number. Creates an
+ * APEX card flagged as a slab and drops it into the collection.
+ */
+export async function addSlabAction(
+  collectionId: string,
+  input: {
+    catalogId: string;
+    gradingCompany: string;
+    grade: string;
+    certNumber?: string;
+    valueCents?: number | null;
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+  if (!(await ownsCollection(supabase, user.id, collectionId)))
+    return { ok: false, error: "Collection not found." };
+
+  const grade = input.grade.trim();
+  if (!grade) return { ok: false, error: "Enter the grade (e.g. 10, 9.5)." };
+  const company = GRADING_COMPANIES.includes(input.gradingCompany)
+    ? input.gradingCompany
+    : "Other";
+
+  const { data: cat } = await supabase
+    .from("pokemon_cards")
+    .select("name, set_name, number, image_url, market_cents")
+    .eq("id", input.catalogId)
+    .maybeSingle();
+  if (!cat) return { ok: false, error: "Pick a card from the catalog first." };
+
+  const valueCents =
+    typeof input.valueCents === "number" && input.valueCents >= 0
+      ? Math.round(input.valueCents)
+      : (cat.market_cents ?? null);
+
+  const { data: card, error: cardErr } = await supabase
+    .from("cards")
+    .insert({
+      owner_id: user.id,
+      category: "tcg",
+      sport_or_game: "Pokémon",
+      player_or_character: cat.name,
+      set_name: cat.set_name,
+      card_number: cat.number,
+      image_url: cat.image_url,
+      is_slab: true,
+      grading_company: company,
+      grade,
+      cert_number: input.certNumber?.trim() || null,
+      id_status: "confirmed",
+      fmv_cents: valueCents,
+      fmv_source: "slab",
+      fmv_notes: `${company} ${grade} slab`,
+      intent: "grade",
+      status: "graded",
+      in_inventory: false,
+    })
+    .select("id")
+    .single();
+  if (cardErr) return { ok: false, error: cardErr.message };
+
+  const { error } = await supabase.from("collection_items").insert({
+    collection_id: collectionId,
+    owner_id: user.id,
+    card_id: card.id,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/dashboard/collections/${collectionId}`);
+  revalidatePath("/dashboard/cards");
+  return { ok: true };
+}
+
 export async function removeItemAction(
   itemId: string,
   collectionId: string,

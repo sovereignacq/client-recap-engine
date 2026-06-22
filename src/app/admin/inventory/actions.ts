@@ -119,3 +119,69 @@ export async function addPoolCardFromSearchAction(
   revalidatePath("/admin");
   return { ok: true, valued: fmvCents !== null };
 }
+
+const GRADING_COMPANIES = ["PSA", "BGS", "CGC", "SGC", "TAG", "Other"];
+
+/** Staff: stock a graded slab into the pack pool so it can be won in Apex Play. */
+export async function addSlabToPoolAction(
+  card: PokemonSearchResult,
+  details: { gradingCompany: string; grade: string; certNumber?: string; valueCents?: number | null },
+): Promise<AddPoolResult> {
+  if (!isStaff(await getRole())) return { ok: false, error: "Not authorized." };
+  const grade = details.grade.trim();
+  if (!grade) return { ok: false, error: "Enter the slab grade." };
+  const company = GRADING_COMPANIES.includes(details.gradingCompany)
+    ? details.gradingCompany
+    : "Other";
+
+  const supabase = await createClient();
+  const { data: ownerUuid } = await supabase.rpc("app_owner_id");
+  if (typeof ownerUuid !== "string" || !ownerUuid) {
+    return { ok: false, error: "No house owner configured." };
+  }
+
+  let fmvCents =
+    typeof details.valueCents === "number" && details.valueCents > 0
+      ? Math.round(details.valueCents)
+      : typeof card.marketPriceCents === "number" && card.marketPriceCents > 0
+        ? card.marketPriceCents
+        : null;
+  let setName = card.setName;
+
+  if (card.id.startsWith("tg:")) {
+    const det = await tcgdexDetail(card.id.slice(3));
+    if (fmvCents == null) fmvCents = det.priceCents;
+    setName = setName || det.setName;
+  }
+
+  if (fmvCents == null || fmvCents <= 0) {
+    return { ok: false, error: "Enter a value — slabs need an FMV to be pulled." };
+  }
+
+  const { error } = await supabase.from("cards").insert({
+    owner_id: ownerUuid,
+    category: "tcg",
+    sport_or_game: "Pokémon",
+    player_or_character: card.name,
+    set_name: setName || null,
+    card_number: card.number || null,
+    is_slab: true,
+    grading_company: company,
+    grade,
+    cert_number: details.certNumber?.trim() || null,
+    id_status: "confirmed",
+    fmv_cents: fmvCents,
+    fmv_source: "slab",
+    fmv_notes: `${company} ${grade} slab`,
+    intent: "sell",
+    status: "inventory",
+    in_inventory: true,
+    image_url: card.imageUrl,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/slabs");
+  revalidatePath("/admin/inventory");
+  revalidatePath("/admin");
+  return { ok: true, valued: true };
+}
