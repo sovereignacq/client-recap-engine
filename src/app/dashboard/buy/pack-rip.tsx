@@ -1,17 +1,117 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ApexMark } from "@/components/apex-mark";
 
 type Phase = "sealed" | "tearing" | "dealing" | "anticipate" | "reveal";
 
 const DECOYS = 5; // cards flipped through before reaching the hit
 
+// Base (slow, suspenseful) timings in ms — divided by the current speed.
+const TEAR_MS = 2200;
+const DEAL_MS = 950;
+const ANTICIPATE_MS = { normal: 1700, jackpot: 2600 };
+const REVEAL_HOLD_MS = { normal: 2400, jackpot: 3400 };
+const FAST_SPEED = 2.75; // multiplier when the player taps to hurry it along
+
+const prefersReduced = () =>
+  typeof window !== "undefined" &&
+  !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Tiny Web-Audio sound kit, synthesized so we ship no audio files. Created on a
+ * user gesture (the rip tap) to satisfy autoplay policies. Every call is
+ * wrapped so a missing/blocked AudioContext just no-ops.
+ */
+function makePackAudio() {
+  let ctx: AudioContext | null = null;
+  const ensure = (): AudioContext | null => {
+    try {
+      if (!ctx) {
+        const AC =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+      }
+      if (ctx.state === "suspended") void ctx.resume();
+      return ctx;
+    } catch {
+      return null;
+    }
+  };
+  const tone = (
+    freq: number,
+    dur: number,
+    opts: { type?: OscillatorType; gain?: number; delay?: number; slideTo?: number } = {},
+  ) => {
+    const c = ensure();
+    if (!c) return;
+    const { type = "sine", gain = 0.18, delay = 0, slideTo } = opts;
+    const t0 = c.currentTime + delay;
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g);
+    g.connect(c.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.03);
+  };
+  const noise = (dur: number, gain = 0.18, lowpass = 1500) => {
+    const c = ensure();
+    if (!c) return;
+    const frames = Math.floor(c.sampleRate * dur);
+    const buf = c.createBuffer(1, frames, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < frames; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const filt = c.createBiquadFilter();
+    filt.type = "lowpass";
+    filt.frequency.value = lowpass;
+    const g = c.createGain();
+    g.gain.value = gain;
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(c.destination);
+    src.start();
+    src.stop(c.currentTime + dur);
+  };
+  return {
+    resume: ensure,
+    rip: () => {
+      noise(0.55, 0.22, 1800);
+      tone(140, 0.5, { type: "sawtooth", gain: 0.08, slideTo: 70 });
+    },
+    tick: () => tone(620, 0.06, { type: "square", gain: 0.07 }),
+    rise: (durSec: number) =>
+      tone(180, Math.max(0.4, durSec), { type: "sawtooth", gain: 0.06, slideTo: 900 }),
+    reveal: () => {
+      tone(523.25, 0.5, { gain: 0.12 });
+      tone(659.25, 0.5, { gain: 0.12, delay: 0.05 });
+      tone(783.99, 0.6, { gain: 0.12, delay: 0.1 });
+    },
+    jackpot: () => {
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
+        tone(f, 0.55, { type: "triangle", gain: 0.14, delay: i * 0.1 }),
+      );
+      noise(0.35, 0.05, 6000);
+    },
+  };
+}
+
 /**
  * TikTok-style pack rip. The result is already decided server-side; this just
  * plays the ritual: tear the pack, riffle the back stack, turn it over, deal
  * cards one-by-one, build anticipation, then reveal the won card — big for a
- * jackpot, subtle otherwise.
+ * jackpot, subtle otherwise. Slow and suspenseful by default; tap the screen to
+ * speed it up. Synthesized sound effects throughout.
  */
 export function PackRip({
   reel,
@@ -30,13 +130,13 @@ export function PackRip({
 }) {
   const [phase, setPhase] = useState<Phase>("sealed");
   const [dealIndex, setDealIndex] = useState(0);
-  const reduced = useRef(false);
+  const [speed, setSpeed] = useState(1);
+  const audio = useRef<ReturnType<typeof makePackAudio> | null>(null);
+  const soundedPhase = useRef<string>("");
 
-  useEffect(() => {
-    reduced.current =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  }, []);
+  // Render-time duration. Under reduced-motion the `.pack-anim` CSS rule zeroes
+  // animation durations via !important, so we don't need to special-case here.
+  const dur = (base: number) => base / speed;
 
   const decoys = useMemo(() => {
     // Mix tier decoys with a couple of grail "teasers" — eye-candy that flashes
@@ -45,45 +145,67 @@ export function PackRip({
     const grails = teasers.filter(Boolean);
     const out: (string | null)[] = [];
     for (let i = 0; i < DECOYS; i++) {
-      // Sprinkle a grail at positions 1 and 3 when we have them.
-      if ((i === 1 || i === 3) && grails.length) {
-        out.push(grails[i % grails.length]);
-      } else if (pool.length) {
-        out.push(pool[i % pool.length]);
-      } else if (grails.length) {
-        out.push(grails[i % grails.length]);
-      } else {
-        out.push(null);
-      }
+      if ((i === 1 || i === 3) && grails.length) out.push(grails[i % grails.length]);
+      else if (pool.length) out.push(pool[i % pool.length]);
+      else if (grails.length) out.push(grails[i % grails.length]);
+      else out.push(null);
     }
     return out;
   }, [reel, teasers]);
 
-  // Phase timers.
+  // Phase timers + per-phase sound cues. Re-runs when speed changes so a tap
+  // shortens the remaining wait; sounds are gated so they don't replay.
   useEffect(() => {
+    const reduced = prefersReduced();
+    const scale = (base: number) => (reduced ? 1 : base / speed);
     if (phase === "tearing") {
-      const t = setTimeout(() => setPhase("dealing"), reduced.current ? 1 : 1500);
+      const t = setTimeout(() => setPhase("dealing"), scale(TEAR_MS));
       return () => clearTimeout(t);
     }
     if (phase === "anticipate") {
-      const t = setTimeout(
-        () => setPhase("reveal"),
-        reduced.current ? 1 : jackpot ? 1500 : 950,
-      );
+      const ms = scale(jackpot ? ANTICIPATE_MS.jackpot : ANTICIPATE_MS.normal);
+      if (soundedPhase.current !== "anticipate") {
+        soundedPhase.current = "anticipate";
+        audio.current?.rise(ms / 1000);
+      }
+      const t = setTimeout(() => setPhase("reveal"), ms);
       return () => clearTimeout(t);
     }
     if (phase === "reveal") {
-      const t = setTimeout(onDone, reduced.current ? 600 : jackpot ? 2600 : 1800);
+      if (soundedPhase.current !== "reveal") {
+        soundedPhase.current = "reveal";
+        if (jackpot) audio.current?.jackpot();
+        else audio.current?.reveal();
+      }
+      const t = setTimeout(
+        onDone,
+        scale(jackpot ? REVEAL_HOLD_MS.jackpot : REVEAL_HOLD_MS.normal),
+      );
       return () => clearTimeout(t);
     }
-  }, [phase, jackpot, onDone]);
+  }, [phase, speed, jackpot, onDone]);
+
+  // A soft tick as each decoy deals past.
+  useEffect(() => {
+    if (phase === "dealing") audio.current?.tick();
+  }, [phase, dealIndex]);
 
   const start = () => {
-    if (reduced.current) {
+    audio.current ??= makePackAudio();
+    audio.current.resume();
+    if (prefersReduced()) {
       setPhase("reveal");
       return;
     }
+    audio.current.rip();
     setPhase("tearing");
+  };
+
+  // Tap anywhere (once we're past the sealed pack, before the reveal) to hurry
+  // the reveal along.
+  const speedUp = () => {
+    if (phase === "sealed" || phase === "reveal") return;
+    setSpeed((s) => (s === 1 ? FAST_SPEED : s));
   };
 
   const onDecoyEnd = () => {
@@ -91,10 +213,22 @@ export function PackRip({
     else setPhase("anticipate");
   };
 
+  const dealtAnim: CSSProperties = {
+    animation: `dealCycle ${Math.round(dur(DEAL_MS))}ms ease-in-out forwards`,
+  };
+  const revealAnim: CSSProperties = {
+    animation: `revealPop ${Math.round(dur(950))}ms cubic-bezier(0.18,0.85,0.2,1) forwards`,
+  };
+
+  const canSpeed = phase !== "sealed" && phase !== "reveal" && speed === 1;
+
   return (
     <div className="flex flex-col items-center">
       <div
-        className="relative flex h-[340px] w-full items-center justify-center overflow-hidden [perspective:1100px]"
+        onClick={speedUp}
+        className={`relative flex h-[340px] w-full items-center justify-center overflow-hidden [perspective:1100px] ${
+          phase !== "sealed" ? "cursor-pointer" : ""
+        }`}
         aria-live="polite"
       >
         {/* Sealed pack */}
@@ -133,7 +267,8 @@ export function PackRip({
             <FlipCard
               key={dealIndex}
               faceImage={decoys[dealIndex] ?? null}
-              className="pack-anim animate-[dealCycle_720ms_ease-in-out_forwards]"
+              className="pack-anim"
+              style={dealtAnim}
               onAnimEnd={onDecoyEnd}
             />
           </div>
@@ -165,7 +300,8 @@ export function PackRip({
             <FlipCard
               faceImage={wonImage}
               start="back"
-              className="pack-anim z-10 animate-[revealPop_900ms_cubic-bezier(0.18,0.85,0.2,1)_forwards]"
+              className="pack-anim z-10"
+              style={revealAnim}
               glow={jackpot}
             />
             {!jackpot && (
@@ -180,9 +316,11 @@ export function PackRip({
           ? "Tap to rip the pack"
           : phase === "reveal"
             ? wonLabel
-            : phase === "anticipate"
-              ? ""
-              : "Ripping…"}
+            : canSpeed
+              ? "Tap to speed up"
+              : phase === "anticipate"
+                ? ""
+                : "Ripping…"}
       </p>
     </div>
   );
@@ -256,18 +394,21 @@ function DeckStack({ faded = false }: { faded?: boolean }) {
 function FlipCard({
   faceImage,
   className = "",
+  style,
   onAnimEnd,
   glow = false,
 }: {
   faceImage: string | null;
   start?: "back";
   className?: string;
+  style?: CSSProperties;
   onAnimEnd?: () => void;
   glow?: boolean;
 }) {
   return (
     <div
       onAnimationEnd={onAnimEnd}
+      style={style}
       className={`pack-3d absolute left-1/2 top-1/2 h-44 w-32 -translate-x-1/2 -translate-y-1/2 ${className}`}
     >
       {/* front (face) */}
