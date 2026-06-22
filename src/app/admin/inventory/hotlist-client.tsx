@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
-import { addPoolCardFromSearchAction } from "./actions";
+import { addPoolCardFromSearchAction, refreshTrendsAction } from "./actions";
 
 export type HotlistPick = {
   tierKey: string;
@@ -18,6 +19,8 @@ export type HotlistPick = {
   imageUrl: string | null;
   marketCents: number;
   poolCnt: number;
+  trending: boolean;
+  trendScore: number;
 };
 
 export function HotlistClient({ initial }: { initial: HotlistPick[] }) {
@@ -25,7 +28,16 @@ export function HotlistClient({ initial }: { initial: HotlistPick[] }) {
   const [qty, setQty] = useState<Record<string, number>>({});
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [adding, startAdd] = useTransition();
+  const [refreshing, startRefresh] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const router = useRouter();
+
+  const refreshTrends = () =>
+    startRefresh(async () => {
+      const r = await refreshTrendsAction();
+      if (r.ok) router.refresh();
+      else setMsg(r.error ?? "Trend refresh failed.");
+    });
 
   const keyOf = (p: HotlistPick) => `${p.tierKey}:${p.catalogId}`;
   const getQty = (k: string) => qty[k] ?? 1;
@@ -79,7 +91,21 @@ export function HotlistClient({ initial }: { initial: HotlistPick[] }) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] uppercase tracking-[0.15em] text-zinc-400">
+          🔥 = trending now (Wikipedia + YouTube)
+        </p>
+        <button
+          type="button"
+          onClick={refreshTrends}
+          disabled={refreshing}
+          className="rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 disabled:opacity-50 dark:border-white/25 dark:hover:bg-white/10"
+        >
+          {refreshing ? "Refreshing trends…" : "Refresh trends"}
+        </button>
+      </div>
+
       {msg && (
         <p className="border-l-2 border-red-500 bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
           {msg}
@@ -127,8 +153,13 @@ export function HotlistClient({ initial }: { initial: HotlistPick[] }) {
                             {p.poolCnt} in pool
                           </span>
                         </div>
-                        <p className="truncate text-[11px] font-medium" title={p.name}>
-                          {p.name}
+                        <p className="flex items-center gap-1 truncate text-[11px] font-medium" title={p.name}>
+                          {p.trending && (
+                            <span className="shrink-0 text-[10px]" title={`Trending (${p.trendScore})`}>
+                              🔥
+                            </span>
+                          )}
+                          <span className="truncate">{p.name}</span>
                         </p>
                         {p.rarity && (
                           <p className="truncate text-[9px] uppercase tracking-[0.1em] text-zinc-500">

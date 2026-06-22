@@ -22,9 +22,10 @@ export default async function AdminHotlistPage() {
             add straight to the pool.
           </p>
           <p className="mt-2 text-[11px] text-zinc-400">
-            Ranked by chase rarity + popular characters + value (we don&apos;t have
-            a TCGplayer stock/trending feed). Every active band is covered; cards
-            shown fall within that band&apos;s value range. English cards only.
+            Ranked by live trend (Wikipedia pageviews + YouTube) plus chase rarity
+            and value. 🔥 marks species trending now. Every active band is covered;
+            cards fall within that band&apos;s value range. English cards only.
+            Trends refresh daily — or hit “Refresh trends”.
           </p>
         </div>
 
