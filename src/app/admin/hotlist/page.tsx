@@ -1,9 +1,13 @@
 import Link from "next/link";
-import { getHotlistAction } from "../inventory/actions";
+import { getHotlistAction, getBandFillAction } from "../inventory/actions";
 import { HotlistClient, type HotlistPick } from "../inventory/hotlist-client";
+import { BandFillClient, type BandFillGroup } from "../inventory/band-fill-client";
 
 export default async function AdminHotlistPage() {
-  const picks = (await getHotlistAction(3)) as HotlistPick[];
+  const [picks, bandFill] = (await Promise.all([
+    getHotlistAction(3),
+    getBandFillAction(),
+  ])) as [HotlistPick[], BandFillGroup[]];
 
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-12">
@@ -29,13 +33,37 @@ export default async function AdminHotlistPage() {
           </p>
         </div>
 
-        {picks.length > 0 ? (
-          <HotlistClient initial={picks} />
-        ) : (
-          <p className="border border-dashed border-black/20 p-10 text-center text-sm text-zinc-500 dark:border-white/20">
-            No catalog matches yet.
-          </p>
-        )}
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">
+              Complete the bands
+            </h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              The exact cards to add so every band reaches the number of distinct
+              cards its odds require — favouring what&apos;s trending. Add a band,
+              a single card, or complete every band in one tap.
+            </p>
+          </div>
+          <BandFillClient initial={bandFill} />
+        </div>
+
+        <div className="space-y-4 border-t border-black/10 pt-8 dark:border-white/15">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">
+              Sought-after picks
+            </h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              Top chase cards per band, ranked by trend, rarity, and value.
+            </p>
+          </div>
+          {picks.length > 0 ? (
+            <HotlistClient initial={picks} />
+          ) : (
+            <p className="border border-dashed border-black/20 p-10 text-center text-sm text-zinc-500 dark:border-white/20">
+              No catalog matches yet.
+            </p>
+          )}
+        </div>
       </div>
     </main>
   );

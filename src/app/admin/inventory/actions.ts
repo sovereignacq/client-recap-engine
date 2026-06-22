@@ -258,6 +258,115 @@ export async function getHotlistAction(perBand = 3): Promise<HotlistPick[]> {
   return out;
 }
 
+type BandFillCard = {
+  catalogId: string;
+  name: string;
+  setName: string;
+  number: string;
+  rarity: string;
+  imageUrl: string | null;
+  marketCents: number;
+  trending: boolean;
+  trendScore: number;
+};
+
+type BandFillGroup = {
+  tierKey: string;
+  tierName: string;
+  bandLabel: string;
+  loCents: number;
+  hiCents: number;
+  target: number;
+  have: number;
+  need: number;
+  picks: BandFillCard[];
+};
+
+/**
+ * Staff: recommendations of cards to ADD so each band reaches the number of
+ * distinct cards its odds require ("complete the band set"). Candidates come
+ * from band_fill_recommendations (in-range, not already pooled, chase-scored),
+ * are re-ranked by live trend (Wikipedia pageviews + YouTube) so the picks also
+ * "complete the trend", then trimmed to exactly how many that band still needs.
+ */
+export async function getBandFillAction(): Promise<BandFillGroup[]> {
+  if (!isStaff(await getRole())) return [];
+  const supabase = await createClient();
+
+  const [{ data, error }, { data: trendRows }] = await Promise.all([
+    supabase.rpc("band_fill_recommendations", { p_candidates: 12 }),
+    supabase.from("trend_scores").select("species, score"),
+  ]);
+  if (error || !Array.isArray(data)) return [];
+
+  const trends = (trendRows ?? []).map((t) => ({
+    species: (t.species as string).toLowerCase(),
+    score: Number(t.score),
+  }));
+  const trendFor = (name: string): number => {
+    const n = name.toLowerCase();
+    let best = 0;
+    for (const t of trends) if (n.includes(t.species) && t.score > best) best = t.score;
+    return best;
+  };
+
+  type Row = {
+    tier_key: string; tier_name: string; band_label: string;
+    lo_cents: number; hi_cents: number; target: number; have: number; need: number;
+    catalog_id: string; name: string; set_name: string | null; number: string | null;
+    rarity: string | null; image_url: string | null; market_cents: number; score: number;
+  };
+
+  // Group candidates by tier+band (rows arrive ordered by tier, band).
+  const groups = new Map<string, BandFillGroup & { _cands: (BandFillCard & { _rank: number })[] }>();
+  for (const r of data as Row[]) {
+    const key = `${r.tier_key}|${r.band_label}`;
+    let g = groups.get(key);
+    if (!g) {
+      g = {
+        tierKey: r.tier_key,
+        tierName: r.tier_name,
+        bandLabel: r.band_label,
+        loCents: r.lo_cents,
+        hiCents: r.hi_cents,
+        target: r.target,
+        have: r.have,
+        need: r.need,
+        picks: [],
+        _cands: [],
+      };
+      groups.set(key, g);
+    }
+    const trendScore = trendFor(r.name);
+    g._cands.push({
+      catalogId: r.catalog_id,
+      name: r.name,
+      setName: r.set_name ?? "",
+      number: r.number ?? "",
+      rarity: r.rarity ?? "",
+      imageUrl: r.image_url,
+      marketCents: r.market_cents,
+      trending: trendScore >= 40,
+      trendScore,
+      _rank: Number(r.score) + trendScore * 1.2,
+    });
+  }
+
+  const out: BandFillGroup[] = [];
+  for (const g of groups.values()) {
+    g._cands.sort((a, b) => b._rank - a._rank);
+    // Recommend exactly as many as the band still needs to be complete.
+    g.picks = g._cands.slice(0, g.need).map(({ _rank, ...rest }) => {
+      void _rank;
+      return rest;
+    });
+    const { _cands, ...rest } = g;
+    void _cands;
+    out.push(rest);
+  }
+  return out;
+}
+
 const GRADING_COMPANIES = ["PSA", "BGS", "CGC", "SGC", "TAG", "Other"];
 
 /** Staff: stock a graded slab into the pack pool so it can be won in Apex Play. */
