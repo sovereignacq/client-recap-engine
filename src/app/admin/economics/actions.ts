@@ -26,6 +26,11 @@ export async function adminUpdateTier(
   revalidatePath("/dashboard/buy");
 }
 
+// Suggested number of distinct cards a full tier should hold, spread across
+// bands by their odds so frequently-hit bands have variety.
+const TARGET_POOL_PER_TIER = 30;
+const MIN_PER_BAND = 2;
+
 type EconBand = {
   label: string;
   loCents: number;
@@ -34,6 +39,7 @@ type EconBand = {
   probPct: number; // chance of this band given current stock (0 if empty)
   poolCnt: number;
   avgFmvCents: number;
+  targetCnt: number; // suggested copies for this band
 };
 
 type PoolEconRow = {
@@ -53,6 +59,21 @@ function money(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function stockingNote(bands: EconBand[]): string {
+  const short = bands
+    .filter((b) => b.poolCnt < b.targetCnt)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 2);
+  if (short.length === 0) return " Stocking levels look good across the bands.";
+  return (
+    " Under-stocked: " +
+    short
+      .map((b) => `${b.label} (have ${b.poolCnt}, aim for ${b.targetCnt})`)
+      .join(", ") +
+    "."
+  );
+}
+
 function buildAdvice(
   status: PoolEconRow["status"],
   priceCents: number,
@@ -60,7 +81,10 @@ function buildAdvice(
   bands: EconBand[],
 ): string {
   if (status === "empty") {
-    return "No cards stocked in this tier's value range yet — add cards in the bands below so it can be pulled.";
+    return (
+      "No cards stocked in this tier's value range yet — add cards in the bands below so it can be pulled." +
+      stockingNote(bands)
+    );
   }
   const live = bands.filter((b) => b.poolCnt > 0);
   // Band contributing the most to the payout (probability × average value).
@@ -80,7 +104,7 @@ function buildAdvice(
     } else {
       s += `Add more low-value cards (under ${money(priceCents)}) to bring the average pull below the pack price.`;
     }
-    return s;
+    return s + stockingNote(bands);
   }
   // positive
   let s = `Healthy — keeping ${money(marginCents)} per pull. `;
@@ -88,7 +112,7 @@ function buildAdvice(
     s += `Watch ${overpaying.map((b) => b.label).join(", ")}: adding pricey cards there will erode the margin. `;
   }
   s += `Keep most inventory in the lower bands to stay positive.`;
-  return s;
+  return s + stockingNote(bands);
 }
 
 /** Live per-tier + per-band house economics, computed from the current pool. */
@@ -125,6 +149,7 @@ export async function getPoolEconomicsAction(): Promise<PoolEconRow[]> {
     const liveWeight = tierRows
       .filter((r) => r.pool_cnt > 0)
       .reduce((s, r) => s + Number(r.weight), 0);
+    const totalWeight = tierRows.reduce((s, r) => s + Number(r.weight), 0) || 1;
 
     const bands: EconBand[] = tierRows.map((r) => ({
       label: r.band_label,
@@ -134,6 +159,10 @@ export async function getPoolEconomicsAction(): Promise<PoolEconRow[]> {
       probPct: r.pool_cnt > 0 && liveWeight > 0 ? (Number(r.weight) / liveWeight) * 100 : 0,
       poolCnt: r.pool_cnt,
       avgFmvCents: r.avg_fmv_cents,
+      targetCnt: Math.max(
+        MIN_PER_BAND,
+        Math.round((Number(r.weight) / totalWeight) * TARGET_POOL_PER_TIER),
+      ),
     }));
 
     const poolCards = bands.reduce((s, b) => s + b.poolCnt, 0);

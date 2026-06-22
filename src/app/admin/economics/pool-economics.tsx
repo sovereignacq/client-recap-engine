@@ -12,6 +12,7 @@ export type EconBand = {
   probPct: number;
   poolCnt: number;
   avgFmvCents: number;
+  targetCnt: number;
 };
 
 export type PoolEconRow = {
@@ -126,7 +127,7 @@ export function PoolEconomics({ initial }: { initial: PoolEconRow[] }) {
                   <th className="px-4 py-1.5 font-medium">Band ($)</th>
                   <th className="px-2 py-1.5 text-right font-medium">Odds</th>
                   <th className="px-2 py-1.5 text-right font-medium">Chance now</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Cards</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Cards / target</th>
                   <th className="px-4 py-1.5 text-right font-medium">Avg value</th>
                 </tr>
               </thead>
@@ -147,10 +148,13 @@ export function PoolEconomics({ initial }: { initial: PoolEconRow[] }) {
                       </td>
                       <td
                         className={`px-2 py-1.5 text-right tabular-nums ${
-                          b.poolCnt === 0 ? "text-zinc-400" : ""
+                          b.poolCnt < b.targetCnt
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-emerald-600 dark:text-emerald-400"
                         }`}
                       >
                         {b.poolCnt}
+                        <span className="text-zinc-400"> / {b.targetCnt}</span>
                       </td>
                       <td
                         className={`px-4 py-1.5 text-right tabular-nums ${
