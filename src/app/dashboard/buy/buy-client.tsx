@@ -71,6 +71,7 @@ export type OwnedCard = {
   fmvCents: number;
   grade: string | null;
   title: string;
+  imageUrl: string | null;
 };
 export type PackCredit = {
   id: string;
@@ -488,6 +489,9 @@ export function BuyClient({
   const [isTrading, startTrade] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tradeResult, setTradeResult] = useState<TradeWon | null>(null);
+  const [tradedCards, setTradedCards] = useState<
+    { title: string; imageUrl: string | null }[]
+  >([]);
   const [tradeError, setTradeError] = useState<string | null>(null);
 
   const toggleSelect = (id: string) =>
@@ -510,10 +514,16 @@ export function BuyClient({
   const tradeUp = () => {
     setTradeError(null);
     const ids = [...selected];
+    // Snapshot the traded-in cards' art now — they leave the player's hands
+    // once the trade succeeds.
+    const traded = ownedCards
+      .filter((c) => selected.has(c.id))
+      .map((c) => ({ title: c.title, imageUrl: c.imageUrl }));
     startTrade(async () => {
       const r = await tradeUpAction(ids);
       if (r.ok) {
         setSelected(new Set());
+        setTradedCards(traded);
         setTradeResult(r);
       } else {
         setTradeError(r.error);
@@ -966,13 +976,24 @@ export function BuyClient({
                       key={c.id}
                       type="button"
                       onClick={() => toggleSelect(c.id)}
-                      className={`flex items-center justify-between gap-3 px-4 py-3 text-left transition ${
+                      className={`flex items-center gap-3 px-4 py-3 text-left transition ${
                         on
                           ? "bg-black text-white dark:bg-white dark:text-black"
                           : "bg-white hover:bg-zinc-50 dark:bg-black dark:hover:bg-zinc-950"
                       }`}
                     >
-                      <span className="min-w-0">
+                      {c.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={c.imageUrl}
+                          alt=""
+                          loading="lazy"
+                          className="h-12 w-9 shrink-0 rounded-sm object-contain"
+                        />
+                      ) : (
+                        <div className="h-12 w-9 shrink-0 rounded-sm border border-current/20 opacity-30" />
+                      )}
+                      <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">
                           {c.title}
                         </span>
@@ -1207,6 +1228,40 @@ export function BuyClient({
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-300">
               Traded up
             </p>
+
+            {/* Old cards → new card, with artwork */}
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <div className="flex -space-x-4">
+                {tradedCards.map((t, i) =>
+                  t.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={i}
+                      src={t.imageUrl}
+                      alt={t.title}
+                      className="h-20 w-14 rounded-sm border border-white/15 object-contain opacity-70 grayscale"
+                    />
+                  ) : (
+                    <div
+                      key={i}
+                      className="h-20 w-14 rounded-sm border border-white/15 bg-white/5"
+                    />
+                  ),
+                )}
+              </div>
+              <span className="text-2xl text-amber-300">→</span>
+              {tradeResult.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={tradeResult.imageUrl}
+                  alt={tradeResult.title}
+                  className="h-32 w-24 rounded-sm border border-amber-400 object-contain shadow-[0_0_30px_rgba(251,191,36,0.5)]"
+                />
+              ) : (
+                <div className="h-32 w-24 rounded-sm border border-amber-400 bg-white/5" />
+              )}
+            </div>
+
             <h3 className="mt-4 text-lg font-semibold">{tradeResult.title}</h3>
             <p className="mt-1 font-mono text-xs text-zinc-400">
               {tradeResult.serial}
