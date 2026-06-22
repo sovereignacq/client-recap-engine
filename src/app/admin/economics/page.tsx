@@ -1,7 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { EconomicsTuner, type TunerTier, type TunerMode } from "./tuner";
 import { PoolEconomics } from "./pool-economics";
-import { getPoolEconomicsAction, getStockingPlanAction } from "./actions";
+import { PoolDedupe } from "./pool-dedupe";
+import {
+  getPoolEconomicsAction,
+  getStockingPlanAction,
+  getDedupePreviewAction,
+} from "./actions";
 
 export default async function AdminEconomicsPage() {
   const supabase = await createClient();
@@ -32,9 +37,10 @@ export default async function AdminEconomicsPage() {
     weightMults: (m.weight_mults as Record<string, number>) ?? {},
   }));
 
-  const [poolEcon, stockingPlan] = await Promise.all([
+  const [poolEcon, stockingPlan, dedupe] = await Promise.all([
     getPoolEconomicsAction(),
     getStockingPlanAction(),
+    getDedupePreviewAction(),
   ]);
 
   return (
@@ -48,6 +54,8 @@ export default async function AdminEconomicsPage() {
           </p>
         </div>
         <PoolEconomics initial={poolEcon} initialPlan={stockingPlan} />
+
+        <PoolDedupe initial={dedupe} />
 
         <EconomicsTuner tiers={tiers} modes={modes} buybackPct={0.8} />
       </div>

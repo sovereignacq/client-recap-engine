@@ -237,6 +237,67 @@ export async function getStockingPlanAction(): Promise<StockSegment[]> {
   }));
 }
 
+type DedupeSegment = {
+  loCents: number;
+  hiCents: number;
+  target: number;
+  poolCnt: number;
+  distinctCnt: number;
+  dupCnt: number;
+  removableCnt: number;
+};
+
+/**
+ * Preview of the de-duplication pass: per value segment, how many surplus
+ * duplicate copies can be trimmed while still meeting the number of cards the
+ * odds require (the target). Only segments that actually hold duplicates appear.
+ */
+export async function getDedupePreviewAction(): Promise<DedupeSegment[]> {
+  if (!isStaff(await getRole())) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("pool_dedupe_preview");
+  if (error || !Array.isArray(data)) return [];
+  return (
+    data as {
+      lo_cents: number;
+      hi_cents: number;
+      target: number;
+      pool_cnt: number;
+      distinct_cnt: number;
+      dup_cnt: number;
+      removable_cnt: number;
+    }[]
+  ).map((s) => ({
+    loCents: s.lo_cents,
+    hiCents: s.hi_cents,
+    target: s.target,
+    poolCnt: s.pool_cnt,
+    distinctCnt: s.distinct_cnt,
+    dupCnt: s.dup_cnt,
+    removableCnt: s.removable_cnt,
+  }));
+}
+
+/**
+ * Run the de-duplication pass: archive surplus duplicate copies out of the pool
+ * for every band that already meets its required card count. Distinct variety
+ * is preserved and no band drops below its target. Returns how many were removed.
+ */
+export async function dedupePoolAction(): Promise<{
+  ok: boolean;
+  removed?: number;
+  error?: string;
+}> {
+  if (!isStaff(await getRole())) return { ok: false, error: "Not authorized." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("pool_dedupe_overstocked");
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/economics");
+  revalidatePath("/admin/inventory");
+  revalidatePath("/admin");
+  return { ok: true, removed: typeof data === "number" ? data : 0 };
+}
+
 export async function adminUpdateMode(
   key: string,
   weightMults: { below: number; even: number; above: number; jackpot: number },
