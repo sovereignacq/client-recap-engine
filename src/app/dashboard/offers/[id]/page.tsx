@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { cardTitle, formatMoneyCents } from "@/lib/cards";
-import { OFFER_STATUSES, PAYOUT_METHODS, offerLabel } from "@/lib/offers";
+import { OFFER_STATUSES, offerLabel } from "@/lib/offers";
 import { OfferControls } from "./offer-controls";
 import { DeleteOfferButton } from "./delete-button";
 
@@ -25,16 +25,6 @@ export default async function OfferDetailPage({
     .eq("owner_id", user.id)
     .maybeSingle();
   if (!offer) notFound();
-
-  const submitter = offer.submitter_id
-    ? (
-        await supabase
-          .from("submitters")
-          .select("id, name")
-          .eq("id", offer.submitter_id)
-          .maybeSingle()
-      ).data
-    : null;
 
   const { data: itemRows } = await supabase
     .from("offer_items")
@@ -69,23 +59,14 @@ export default async function OfferDetailPage({
             {offerLabel(OFFER_STATUSES, offer.status)}
           </p>
           <h1 className="text-3xl font-semibold tracking-tight">
-            {submitter ? (
-              <Link
-                href={`/dashboard/submitters/${submitter.id}`}
-                className="hover:underline"
-              >
-                {submitter.name}
-              </Link>
-            ) : (
-              "Walk-in"
-            )}
+            Sell-to-us offer
           </h1>
           <p className="text-sm text-zinc-500">
-            Offer total{" "}
+            Asking total{" "}
             <span className="font-semibold tabular-nums text-black dark:text-white">
               {formatMoneyCents(offer.offer_total_cents)}
             </span>{" "}
-            · {items.length} card{items.length === 1 ? "" : "s"}
+            · {items.length} card{items.length === 1 ? "" : "s"} · paid to wallet
           </p>
         </header>
 
@@ -120,11 +101,7 @@ export default async function OfferDetailPage({
         <OfferControls
           offerId={offer.id}
           status={offer.status}
-          payoutMethod={offer.payout_method}
-          payoutReference={offer.payout_reference}
           notes={offer.notes}
-          payoutMethods={PAYOUT_METHODS.map((m) => ({ ...m }))}
-          statuses={OFFER_STATUSES.map((s) => ({ ...s }))}
         />
 
         <footer className="flex items-center justify-between pt-2 text-xs text-zinc-500">

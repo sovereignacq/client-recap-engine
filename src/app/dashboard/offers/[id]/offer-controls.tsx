@@ -2,12 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { OFFER_STATUSES, offerLabel } from "@/lib/offers";
 import {
   updateOfferStatusAction,
   updateOfferDetailsAction,
 } from "../actions";
-
-type Option = { value: string; label: string };
 
 const INPUT =
   "rounded-none border border-black/15 bg-transparent px-3 py-2.5 text-sm outline-none transition focus:border-black dark:border-white/20 dark:focus:border-white";
@@ -17,40 +16,23 @@ const LABEL =
 export function OfferControls({
   offerId,
   status,
-  payoutMethod,
-  payoutReference,
   notes,
-  payoutMethods,
-  statuses,
 }: {
   offerId: string;
   status: string;
-  payoutMethod: string | null;
-  payoutReference: string | null;
   notes: string | null;
-  payoutMethods: Option[];
-  statuses: Option[];
 }) {
   const router = useRouter();
   const [isStatus, startStatus] = useTransition();
   const [isSaving, startSave] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-
-  const [method, setMethod] = useState(payoutMethod ?? "");
-  const [reference, setReference] = useState(payoutReference ?? "");
   const [note, setNote] = useState(notes ?? "");
 
+  // Once we're processing the offer the customer can't change it anymore.
+  const locked = ["accepted", "paid", "declined"].includes(status);
+
   const changeStatus = (next: string) => {
-    if (next === status) return;
-    if (
-      next === "paid" &&
-      !confirm(
-        "Mark this offer paid? The included cards will be marked as sold.",
-      )
-    ) {
-      return;
-    }
     setError(null);
     startStatus(async () => {
       const r = await updateOfferStatusAction(offerId, next);
@@ -59,12 +41,10 @@ export function OfferControls({
     });
   };
 
-  const saveDetails = () => {
+  const saveNote = () => {
     setError(null);
     setSaved(false);
     const fd = new FormData();
-    fd.set("payout_method", method);
-    fd.set("payout_reference", reference);
     fd.set("notes", note);
     startSave(async () => {
       const r = await updateOfferDetailsAction(offerId, fd);
@@ -80,69 +60,75 @@ export function OfferControls({
     <section className="space-y-6 border border-black/10 p-6 dark:border-white/15">
       <div>
         <p className={LABEL}>Status</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {statuses.map((s) => {
-            const active = s.value === status;
-            return (
-              <button
-                key={s.value}
-                type="button"
-                disabled={isStatus || active}
-                onClick={() => changeStatus(s.value)}
-                className={`rounded-none px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.12em] transition disabled:opacity-100 ${
-                  active
-                    ? "bg-black text-white dark:bg-white dark:text-black"
-                    : "border border-black/20 hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
-                }`}
-              >
-                {s.label}
-              </button>
-            );
-          })}
-        </div>
-        {status === "paid" && (
+        <p className="mt-2 text-sm">
+          {offerLabel(OFFER_STATUSES, status)}
+        </p>
+
+        {status === "draft" && (
+          <button
+            type="button"
+            disabled={isStatus}
+            onClick={() => changeStatus("sent")}
+            className="mt-3 rounded-none bg-black px-5 py-3 text-xs font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            {isStatus ? "Submitting…" : "Submit offer for review"}
+          </button>
+        )}
+        {status === "sent" && (
           <p className="mt-2 text-xs text-zinc-500">
-            Included cards have been marked sold.
+            Submitted — our team will review and accept it, then send you the
+            shipping address. You&apos;ll be paid to your wallet once the cards
+            arrive and check out.
           </p>
+        )}
+        {status === "accepted" && (
+          <p className="mt-2 text-xs text-zinc-500">
+            Accepted — ship your cards to the address we sent you. We pay your
+            wallet after they arrive and verify.
+          </p>
+        )}
+        {status === "paid" && (
+          <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
+            Paid to your APEX wallet. Withdraw it any time from the wallet page.
+          </p>
+        )}
+        {status === "declined" && (
+          <p className="mt-2 text-xs text-zinc-500">
+            This offer was declined.
+          </p>
+        )}
+
+        {(status === "draft" || status === "sent") && (
+          <button
+            type="button"
+            disabled={isStatus}
+            onClick={() => changeStatus("canceled")}
+            className="mt-3 ml-0 block rounded-none border border-black/20 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
+          >
+            Cancel offer
+          </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col">
-          <label className={LABEL}>Payout method</label>
-          <select
-            value={method}
-            onChange={(e) => setMethod(e.target.value)}
-            className={`mt-1 ${INPUT}`}
-          >
-            <option value="">— not set —</option>
-            {payoutMethods.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col">
-          <label className={LABEL}>Payout reference</label>
-          <input
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            placeholder="Transaction ID, check #, etc."
-            className={`mt-1 ${INPUT}`}
+      {!locked && status !== "canceled" && (
+        <div>
+          <label className={LABEL}>Notes</label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            className={`mt-1 w-full ${INPUT}`}
           />
+          <button
+            type="button"
+            onClick={saveNote}
+            disabled={isSaving}
+            className="mt-2 rounded-none border border-black/20 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
+          >
+            {isSaving ? "Saving…" : "Save note"}
+          </button>
         </div>
-      </div>
-
-      <div>
-        <label className={LABEL}>Notes</label>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={2}
-          className={`mt-1 w-full ${INPUT}`}
-        />
-      </div>
+      )}
 
       {error && (
         <p className="border-l-2 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
@@ -150,15 +136,6 @@ export function OfferControls({
         </p>
       )}
       {saved && !error && <p className="text-xs text-emerald-600">Saved.</p>}
-
-      <button
-        type="button"
-        onClick={saveDetails}
-        disabled={isSaving}
-        className="rounded-none bg-black px-5 py-3 text-xs font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-      >
-        {isSaving ? "Saving…" : "Save details"}
-      </button>
     </section>
   );
 }

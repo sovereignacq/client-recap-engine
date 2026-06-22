@@ -56,41 +56,29 @@ export async function adminUpdateOfferStatus(
   }
   const supabase = await createClient();
 
-  const patch: Record<string, unknown> = {
-    status,
-    updated_at: new Date().toISOString(),
-  };
-  if (status === "accepted") patch.accepted_at = new Date().toISOString();
-  if (status === "paid") patch.paid_at = new Date().toISOString();
-
-  const { error } = await supabase.from("offers").update(patch).eq("id", offerId);
-  if (error) return { error: error.message };
-
+  // Paying out runs atomically in admin_pay_offer: credit the seller's wallet
+  // (withdrawable) and move the bought cards into the house pool.
   if (status === "paid") {
-    const { data: items } = await supabase
-      .from("offer_items")
-      .select("card_id")
-      .eq("offer_id", offerId);
-    const cardIds = (items ?? []).map((i) => i.card_id);
-    if (cardIds.length) {
-      // Cards we buy become house inventory, eligible to be packed.
-      const { data: owner } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("role", "owner")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      await supabase
-        .from("cards")
-        .update({
-          status: "inventory",
-          in_inventory: true,
-          owner_id: owner?.id,
-          updated_at: new Date().toISOString(),
-        })
-        .in("id", cardIds);
+    const { error } = await supabase.rpc("admin_pay_offer", {
+      p_offer_id: offerId,
+    });
+    if (error) {
+      const msg = /already paid/i.test(error.message)
+        ? "This offer has already been paid out."
+        : error.message;
+      return { error: msg };
     }
+  } else {
+    const patch: Record<string, unknown> = {
+      status,
+      updated_at: new Date().toISOString(),
+    };
+    if (status === "accepted") patch.accepted_at = new Date().toISOString();
+    const { error } = await supabase
+      .from("offers")
+      .update(patch)
+      .eq("id", offerId);
+    if (error) return { error: error.message };
   }
 
   revalidatePath(`/admin/offers/${offerId}`);

@@ -192,14 +192,15 @@ export default async function BuyPage() {
     pityByTier[`${p.category_key}:${p.tier_key}`] = p.count;
   });
 
-  // Cards the player won and still holds — eligible to consolidate via trade-up.
+  // Cards the player owns and can consolidate via trade-up — pulls and
+  // collected/intaked cards alike (anything not in the house pool).
   const { data: ownedRows } = await supabase
     .from("cards")
     .select(
       "id, serial, fmv_cents, auto_grade_label, card_year, manufacturer, set_name, player_or_character, card_number, variant",
     )
     .eq("owner_id", user.id)
-    .eq("status", "won")
+    .in("status", ["won", "received", "identified", "graded"])
     .eq("in_inventory", false)
     .is("archived_at", null)
     .not("fmv_cents", "is", null)
@@ -234,6 +235,8 @@ export default async function BuyPage() {
     outcome: string | null;
     created_at: string;
     handle: string;
+    card_name: string | null;
+    image_url: string | null;
   }[];
 
   return (
@@ -299,13 +302,29 @@ export default async function BuyPage() {
                 return (
                   <li
                     key={i}
-                    className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm"
+                    className="flex items-center gap-3 px-5 py-2.5 text-sm"
                   >
-                    <span className="min-w-0 truncate">
+                    {f.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={f.image_url}
+                        alt=""
+                        loading="lazy"
+                        className="h-10 w-7 shrink-0 rounded-sm border border-black/10 bg-white object-contain dark:border-white/15 dark:bg-black"
+                      />
+                    ) : (
+                      <div className="h-10 w-7 shrink-0 rounded-sm border border-dashed border-black/15 dark:border-white/20" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate">
                       <span className="font-medium">{maskHandle(f.handle)}</span>
                       <span className="text-zinc-500">
                         {" "}
-                        pulled {tierName.get(f.tier_key) ?? f.tier_key}
+                        pulled{" "}
+                      </span>
+                      <span className="font-medium">{f.card_name ?? "a card"}</span>
+                      <span className="text-zinc-500">
+                        {" "}
+                        · {tierName.get(f.tier_key) ?? f.tier_key}
                       </span>
                     </span>
                     <span

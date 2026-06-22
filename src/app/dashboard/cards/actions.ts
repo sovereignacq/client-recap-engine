@@ -10,7 +10,7 @@ import {
   type CardCategory,
   type GradeResult,
 } from "@/lib/ai/client";
-import { lookupPokemonCard } from "@/lib/pokemon";
+import { lookupPokemonCard, type PokemonSearchResult } from "@/lib/pokemon";
 import { getRole, isStaff } from "@/lib/roles";
 
 const BUCKET = "card-images";
@@ -400,6 +400,7 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
       image_path: String(formData.get("image_path") ?? "").trim() || null,
       image_back_path:
         String(formData.get("image_back_path") ?? "").trim() || null,
+      image_url: String(formData.get("image_url") ?? "").trim() || null,
     })
     .select("id")
     .single();
@@ -409,6 +410,88 @@ export async function createCardAction(formData: FormData): Promise<SaveState> {
   revalidatePath("/dashboard/cards");
   revalidatePath("/dashboard");
   if (submitterId) revalidatePath(`/dashboard/submitters/${submitterId}`);
+  return { ok: true, id: data.id };
+}
+
+/** Search the card catalog (for the quick collector intake). */
+export async function quickCatalogSearchAction(
+  q: string,
+): Promise<PokemonSearchResult[]> {
+  const supabase = await createClient();
+  if (!q.trim()) return [];
+  const { data, error } = await supabase.rpc("public_catalog_search", {
+    p_q: q.trim(),
+  });
+  if (error || !Array.isArray(data)) return [];
+  return (
+    data as {
+      id: string;
+      name: string;
+      set_name: string | null;
+      number: string | null;
+      rarity: string | null;
+      image_url: string | null;
+      market_cents: number | null;
+      language: string | null;
+    }[]
+  ).map((c) => ({
+    id: c.id,
+    name: c.name,
+    setName: c.set_name ?? "",
+    number: c.number ?? "",
+    rarity: c.rarity ?? "",
+    imageUrl: c.image_url,
+    marketPriceCents: c.market_cents,
+    language: c.language ?? "en",
+  }));
+}
+
+/**
+ * Quick collector intake: turn a catalog card into one of the user's own cards
+ * with its name, set, artwork and market value pre-filled — no photos, no
+ * grading. For people who use APEX to catalog/collect rather than to grade.
+ */
+export async function quickAddCardAction(
+  catalogId: string,
+): Promise<SaveState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const { data: cat } = await supabase
+    .from("pokemon_cards")
+    .select("id, name, set_name, number, rarity, image_url, market_cents, language")
+    .eq("id", catalogId)
+    .maybeSingle();
+  if (!cat) return { ok: false, error: "Card not found in the catalog." };
+
+  const { data, error } = await supabase
+    .from("cards")
+    .insert({
+      owner_id: user.id,
+      category: "tcg",
+      sport_or_game: "Pokémon",
+      player_or_character: cat.name,
+      set_name: cat.set_name,
+      card_number: cat.number,
+      variant: cat.rarity,
+      id_status: "confirmed",
+      fmv_cents: cat.market_cents,
+      fmv_source: cat.market_cents !== null ? "catalog" : null,
+      fmv_notes: "Added from catalog",
+      intent: "grade",
+      status: "received",
+      in_inventory: false,
+      image_url: cat.image_url,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/cards");
+  revalidatePath("/dashboard");
   return { ok: true, id: data.id };
 }
 

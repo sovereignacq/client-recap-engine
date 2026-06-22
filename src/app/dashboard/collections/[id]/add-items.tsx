@@ -7,6 +7,7 @@ import type { PokemonSearchResult } from "@/lib/pokemon";
 import {
   addApexCardAction,
   addPhysicalCardAction,
+  addSlabAction,
   searchCatalogAction,
 } from "../actions";
 
@@ -17,6 +18,8 @@ export type OwnedCard = {
   imageUrl: string | null;
 };
 
+const GRADING_COMPANIES = ["PSA", "BGS", "CGC", "SGC", "TAG", "Other"];
+
 export function AddItems({
   collectionId,
   owned,
@@ -25,12 +28,19 @@ export function AddItems({
   owned: OwnedCard[];
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"apex" | "physical">("apex");
+  const [tab, setTab] = useState<"apex" | "physical" | "slab">("apex");
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PokemonSearchResult[]>([]);
   const [searching, startSearch] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+
+  // Slab entry: picked catalog card + grading details.
+  const [slabPick, setSlabPick] = useState<PokemonSearchResult | null>(null);
+  const [slabCompany, setSlabCompany] = useState("PSA");
+  const [slabGrade, setSlabGrade] = useState("10");
+  const [slabCert, setSlabCert] = useState("");
+  const [slabValue, setSlabValue] = useState("");
 
   function addApex(cardId: string) {
     startTransition(async () => {
@@ -44,6 +54,27 @@ export function AddItems({
       const r = await addPhysicalCardAction(collectionId, catalogId, 1);
       if (r?.error) setMsg(r.error);
       else router.refresh();
+    });
+  }
+  function addSlab() {
+    if (!slabPick) return;
+    setMsg(null);
+    startTransition(async () => {
+      const r = await addSlabAction(collectionId, {
+        catalogId: slabPick.id,
+        gradingCompany: slabCompany,
+        grade: slabGrade,
+        certNumber: slabCert || undefined,
+        valueCents: slabValue
+          ? Math.round(Number(slabValue.replace(/[$,]/g, "")) * 100)
+          : null,
+      });
+      if (r.ok) {
+        setSlabPick(null);
+        setSlabCert("");
+        setSlabValue("");
+        router.refresh();
+      } else setMsg(r.error);
     });
   }
   function search() {
@@ -64,16 +95,78 @@ export function AddItems({
       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
         Add a card
       </p>
-      <div className="mt-3 inline-flex border border-black/15 dark:border-white/20">
+      <div className="mt-3 inline-flex flex-wrap border border-black/15 dark:border-white/20">
         <button type="button" className={TAB(tab === "apex")} onClick={() => setTab("apex")}>
           My APEX cards
         </button>
         <button type="button" className={TAB(tab === "physical")} onClick={() => setTab("physical")}>
           Physical card
         </button>
+        <button type="button" className={TAB(tab === "slab")} onClick={() => setTab("slab")}>
+          Slab
+        </button>
       </div>
 
       {msg && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{msg}</p>}
+
+      {tab === "slab" && slabPick && (
+        <div className="mt-4 space-y-3 border border-black/10 p-3 dark:border-white/15">
+          <div className="flex items-center gap-3">
+            {slabPick.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={slabPick.imageUrl} alt="" className="h-16 w-12 object-contain" />
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{slabPick.name}</p>
+              <button
+                type="button"
+                onClick={() => setSlabPick(null)}
+                className="text-[10px] uppercase tracking-[0.12em] text-zinc-500 underline-offset-2 hover:underline"
+              >
+                Change card
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={slabCompany}
+              onChange={(e) => setSlabCompany(e.target.value)}
+              className="rounded-none border border-black/20 bg-transparent px-2 py-2 text-sm outline-none focus:border-black dark:border-white/25 dark:focus:border-white"
+            >
+              {GRADING_COMPANIES.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+            <input
+              value={slabGrade}
+              onChange={(e) => setSlabGrade(e.target.value)}
+              placeholder="Grade (e.g. 10)"
+              className="rounded-none border border-black/20 bg-transparent px-2 py-2 text-sm outline-none focus:border-black dark:border-white/25 dark:focus:border-white"
+            />
+            <input
+              value={slabCert}
+              onChange={(e) => setSlabCert(e.target.value)}
+              placeholder="Cert # (optional)"
+              className="rounded-none border border-black/20 bg-transparent px-2 py-2 text-sm outline-none focus:border-black dark:border-white/25 dark:focus:border-white"
+            />
+            <input
+              value={slabValue}
+              onChange={(e) => setSlabValue(e.target.value)}
+              inputMode="decimal"
+              placeholder="Value $ (optional)"
+              className="rounded-none border border-black/20 bg-transparent px-2 py-2 text-sm outline-none focus:border-black dark:border-white/25 dark:focus:border-white"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={addSlab}
+            className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            {pending ? "Adding…" : "Add slab"}
+          </button>
+        </div>
+      )}
 
       {tab === "apex" ? (
         owned.length > 0 ? (
@@ -149,10 +242,12 @@ export function AddItems({
                   <button
                     type="button"
                     disabled={pending}
-                    onClick={() => addPhysical(c.id)}
+                    onClick={() =>
+                      tab === "slab" ? setSlabPick(c) : addPhysical(c.id)
+                    }
                     className="mt-1 rounded-none border border-black/20 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 disabled:opacity-50 dark:border-white/25 dark:hover:bg-white/10"
                   >
-                    Add
+                    {tab === "slab" ? "Select" : "Add"}
                   </button>
                 </li>
               ))}

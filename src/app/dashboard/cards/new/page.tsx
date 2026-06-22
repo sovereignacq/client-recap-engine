@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isAIConfigured } from "@/lib/ai/client";
 import { getRole, isStaff } from "@/lib/roles";
-import { NewCardForm } from "./new-card-form";
+import { IntakeModes } from "./intake-modes";
 
 // Identification (photo upload + vision) can run well past the default
 // serverless limit, especially with both front and back images. Allow up to
@@ -39,21 +39,23 @@ export default async function NewCardPage({
           ← Back to cards
         </Link>
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Intake a card</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Add a card</h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Add photos of the front and back to identify the card, confirm the
-            details, then save to assign a tracking serial.
+            Just collecting? Use <strong>Quick add</strong> to search the catalog
+            and add cards in seconds. Sending a card to grading or selling it?
+            Use <strong>Grade &amp; serialize</strong> for the full photo,
+            grade and serial workflow.
           </p>
         </div>
 
         {!isAIConfigured() && (
           <p className="border-l-2 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-            Automatic identification is currently offline. You can still enter
-            cards manually below.
+            Automatic identification is currently offline. Quick add still works,
+            and you can enter cards manually under Grade &amp; serialize.
           </p>
         )}
 
-        <NewCardForm
+        <IntakeModes
           submitters={submitters ?? []}
           defaultSubmitterId={submitter ?? null}
           aiConfigured={isAIConfigured()}

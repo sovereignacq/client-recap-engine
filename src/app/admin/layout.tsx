@@ -33,6 +33,7 @@ export default async function AdminLayout({
                   items: [
                     { label: "Submissions", href: "/admin/cards" },
                     { label: "Inventory", href: "/admin/inventory" },
+                    { label: "Slabs", href: "/admin/slabs" },
                     { label: "Archive", href: "/admin/archive" },
                   ],
                 },
