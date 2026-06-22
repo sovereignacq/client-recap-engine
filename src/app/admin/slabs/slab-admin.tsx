@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
 import type { PokemonSearchResult } from "@/lib/pokemon";
 import {
   searchPoolCardsAction,
   addSlabToPoolAction,
+  slabValuePreviewAction,
 } from "../inventory/actions";
 import { adminToggleInventory } from "../actions";
 
@@ -39,7 +40,20 @@ export function SlabAdmin({ slabs }: { slabs: SlabRow[] }) {
   const [company, setCompany] = useState("PSA");
   const [grade, setGrade] = useState("10");
   const [cert, setCert] = useState("");
-  const [value, setValue] = useState("");
+  const [valueCents, setValueCents] = useState<number | null>(null);
+  const [valuing, startValue] = useTransition();
+
+  useEffect(() => {
+    const p = pick;
+    const g = grade.trim();
+    startValue(async () => {
+      if (!p || !g) {
+        setValueCents(null);
+        return;
+      }
+      setValueCents(await slabValuePreviewAction(p.id, company, g));
+    });
+  }, [pick, company, grade]);
 
   const search = () =>
     startSearch(async () => {
@@ -56,14 +70,10 @@ export function SlabAdmin({ slabs }: { slabs: SlabRow[] }) {
         gradingCompany: company,
         grade,
         certNumber: cert || undefined,
-        valueCents: value
-          ? Math.round(Number(value.replace(/[$,]/g, "")) * 100)
-          : null,
       });
       if (r.ok) {
         setPick(null);
         setCert("");
-        setValue("");
         router.refresh();
       } else setMsg(r.error);
     });
@@ -102,7 +112,7 @@ export function SlabAdmin({ slabs }: { slabs: SlabRow[] }) {
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <select value={company} onChange={(e) => setCompany(e.target.value)} className={INPUT}>
                 {GRADING_COMPANIES.map((g) => (
                   <option key={g} value={g}>{g}</option>
@@ -110,11 +120,19 @@ export function SlabAdmin({ slabs }: { slabs: SlabRow[] }) {
               </select>
               <input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="Grade" className={INPUT} />
               <input value={cert} onChange={(e) => setCert(e.target.value)} placeholder="Cert # (opt)" className={INPUT} />
-              <input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" placeholder="Value $" className={INPUT} />
             </div>
+            <p className="text-sm">
+              <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">Value </span>
+              <span className="font-semibold tabular-nums">
+                {valuing ? "…" : valueCents != null ? formatMoneyCents(valueCents) : "—"}
+              </span>
+              <span className="ml-2 text-[11px] text-zinc-500">
+                auto-priced from the slab database
+              </span>
+            </p>
             <button
               type="button"
-              disabled={pending}
+              disabled={pending || valueCents == null}
               onClick={addToPool}
               className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >

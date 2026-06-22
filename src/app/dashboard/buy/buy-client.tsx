@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
+import { playCashRegister } from "@/lib/sfx";
 import { PackCarousel } from "./pack-carousel";
 import { PackRip } from "./pack-rip";
 import { ResetTimer } from "./reset-timer";
@@ -462,6 +463,7 @@ export function BuyClient({
       if (r.ok) {
         setBalance(r.balance);
         setSold(true);
+        playCashRegister();
       } else {
         setError(r.error);
       }

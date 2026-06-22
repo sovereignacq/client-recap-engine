@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
+import { playCashRegister } from "@/lib/sfx";
 import {
   keepCardAction,
   undecidedCardAction,
@@ -55,6 +56,17 @@ export function WonDecision({
     });
   };
 
+  const sell = () => {
+    setError(null);
+    start(async () => {
+      const r = await sellBackAction(cardId);
+      if (r.ok) {
+        playCashRegister();
+        router.refresh();
+      } else setError(r.error ?? "Something went wrong.");
+    });
+  };
+
   // Already kept — offer only a sell-back so they can change their mind.
   if (decided) {
     return (
@@ -62,7 +74,7 @@ export function WonDecision({
         <button
           type="button"
           disabled={isPending || payout <= 0}
-          onClick={() => run(() => sellBackAction(cardId))}
+          onClick={sell}
           className="rounded-none border border-black/20 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.15em] transition hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
         >
           Sell back +{formatMoneyCents(payout)}
@@ -107,7 +119,7 @@ export function WonDecision({
         <button
           type="button"
           disabled={isPending || payout <= 0}
-          onClick={() => run(() => sellBackAction(cardId))}
+          onClick={sell}
           className="rounded-none border border-black/20 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.15em] transition hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
         >
           Sell back +{formatMoneyCents(payout)}

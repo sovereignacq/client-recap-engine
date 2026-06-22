@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoneyCents } from "@/lib/cards";
 import type { PokemonSearchResult } from "@/lib/pokemon";
@@ -8,6 +8,7 @@ import {
   addApexCardAction,
   addPhysicalCardAction,
   addSlabAction,
+  lookupSlabValueAction,
   searchCatalogAction,
 } from "../actions";
 
@@ -40,7 +41,22 @@ export function AddItems({
   const [slabCompany, setSlabCompany] = useState("PSA");
   const [slabGrade, setSlabGrade] = useState("10");
   const [slabCert, setSlabCert] = useState("");
-  const [slabValue, setSlabValue] = useState("");
+  const [slabValueCents, setSlabValueCents] = useState<number | null>(null);
+  const [valuing, startValue] = useTransition();
+
+  // Pull the slab's value from the price database whenever the card/company/
+  // grade changes.
+  useEffect(() => {
+    const p = slabPick;
+    const g = slabGrade.trim();
+    startValue(async () => {
+      if (!p || !g) {
+        setSlabValueCents(null);
+        return;
+      }
+      setSlabValueCents(await lookupSlabValueAction(p.id, slabCompany, g));
+    });
+  }, [slabPick, slabCompany, slabGrade]);
 
   function addApex(cardId: string) {
     startTransition(async () => {
@@ -65,14 +81,10 @@ export function AddItems({
         gradingCompany: slabCompany,
         grade: slabGrade,
         certNumber: slabCert || undefined,
-        valueCents: slabValue
-          ? Math.round(Number(slabValue.replace(/[$,]/g, "")) * 100)
-          : null,
       });
       if (r.ok) {
         setSlabPick(null);
         setSlabCert("");
-        setSlabValue("");
         router.refresh();
       } else setMsg(r.error);
     });
@@ -147,16 +159,24 @@ export function AddItems({
               value={slabCert}
               onChange={(e) => setSlabCert(e.target.value)}
               placeholder="Cert # (optional)"
-              className="rounded-none border border-black/20 bg-transparent px-2 py-2 text-sm outline-none focus:border-black dark:border-white/25 dark:focus:border-white"
-            />
-            <input
-              value={slabValue}
-              onChange={(e) => setSlabValue(e.target.value)}
-              inputMode="decimal"
-              placeholder="Value $ (optional)"
-              className="rounded-none border border-black/20 bg-transparent px-2 py-2 text-sm outline-none focus:border-black dark:border-white/25 dark:focus:border-white"
+              className="col-span-2 rounded-none border border-black/20 bg-transparent px-2 py-2 text-sm outline-none focus:border-black dark:border-white/25 dark:focus:border-white"
             />
           </div>
+          <p className="text-sm">
+            <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+              Value{" "}
+            </span>
+            <span className="font-semibold tabular-nums">
+              {valuing
+                ? "…"
+                : slabValueCents != null
+                  ? formatMoneyCents(slabValueCents)
+                  : "—"}
+            </span>
+            <span className="ml-2 text-[11px] text-zinc-500">
+              auto-priced from the slab database
+            </span>
+          </p>
           <button
             type="button"
             disabled={pending}
