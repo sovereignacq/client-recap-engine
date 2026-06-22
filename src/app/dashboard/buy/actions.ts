@@ -530,9 +530,11 @@ export async function requestWithdrawalAction(
       ? "That's more than your withdrawable balance (bonus money can't be cashed out)."
       : /minimum withdrawal/i.test(error.message)
         ? "Minimum withdrawal is $5."
-        : /taking a break/i.test(error.message)
-          ? "You're taking a break — withdrawals are paused."
-          : error.message;
+        : /set up payouts/i.test(error.message)
+          ? "Set up payouts (verify your identity) before withdrawing."
+          : /taking a break/i.test(error.message)
+            ? "You're taking a break — withdrawals are paused."
+            : error.message;
     return { ok: false, error: msg };
   }
   const d = data as { balance_after: number; withdrawable_after: number };

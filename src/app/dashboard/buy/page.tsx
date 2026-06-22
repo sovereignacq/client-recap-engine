@@ -92,7 +92,7 @@ export default async function BuyPage() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "balance_cents, withdrawable_cents, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents, referral_code, checkin_streak, checkin_total, last_checkin_at, last_checkin_on, last_spin_at",
+      "balance_cents, withdrawable_cents, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents, referral_code, checkin_streak, checkin_total, last_checkin_at, last_checkin_on, last_spin_at, stripe_connect_id, connect_details_submitted, connect_payouts_enabled",
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -289,6 +289,11 @@ export default async function BuyPage() {
           pausedUntil={pausedUntil}
           spendLimitCents={profile?.daily_spend_limit_cents ?? null}
           depositLimitCents={profile?.daily_deposit_limit_cents ?? null}
+          payout={{
+            hasAccount: !!profile?.stripe_connect_id,
+            detailsSubmitted: !!profile?.connect_details_submitted,
+            payoutsEnabled: !!profile?.connect_payouts_enabled,
+          }}
         />
 
         {feed.length > 0 && (
