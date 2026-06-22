@@ -196,6 +196,47 @@ export async function getPoolEconomicsAction(): Promise<PoolEconRow[]> {
   return out;
 }
 
+type StockSegment = {
+  loCents: number;
+  hiCents: number;
+  poolCnt: number;
+  tiers: string[];
+  targetCnt: number;
+};
+
+/**
+ * Consolidated stocking plan: tiers share one pool, so their value bands
+ * overlap. This merges them into unified price segments — a card in a segment
+ * counts for every tier listed — so inventory is planned once, by value.
+ */
+export async function getStockingPlanAction(): Promise<StockSegment[]> {
+  if (!isStaff(await getRole())) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("pool_stocking_plan");
+  if (error || !Array.isArray(data)) return [];
+  return (
+    data as {
+      lo_cents: number;
+      hi_cents: number;
+      pool_cnt: number;
+      tiers: string[];
+      tier_count: number;
+      max_weight: number;
+    }[]
+  ).map((s) => ({
+    loCents: s.lo_cents,
+    hiCents: s.hi_cents,
+    poolCnt: s.pool_cnt,
+    tiers: s.tiers ?? [],
+    // Hotter value ranges (higher band weight) and more tiers depending on them
+    // want more variety; shared, so this is a single target for the segment.
+    targetCnt: Math.max(
+      2,
+      Math.min(20, Math.round((Number(s.max_weight) / 100) * 18)),
+    ),
+  }));
+}
+
 export async function adminUpdateMode(
   key: string,
   weightMults: { below: number; even: number; above: number; jackpot: number },
