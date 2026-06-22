@@ -372,8 +372,16 @@ export function BuyClient({
             `🔥 ${r.streak}-day streak — free ${tierLabel(r.tier)} pack unlocked!`,
           );
           router.refresh();
+        } else if (r.reset) {
+          // Missed a day: streak (and progress toward the weekly/monthly
+          // rewards) starts over.
+          setRewardMsg(
+            `Streak reset — you missed a day, so you're back to day 1. Check in ${r.weekDays} days straight for a free pack.`,
+          );
         } else {
-          setRewardMsg(`Checked in — ${r.streak}-day streak`);
+          setRewardMsg(
+            `Checked in — ${r.streak}-day streak (day ${r.streak % r.weekDays || r.weekDays}/${r.weekDays} to the next free pack)`,
+          );
         }
       } else {
         setRewardMsg(r.error);

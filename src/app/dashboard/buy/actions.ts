@@ -620,6 +620,7 @@ export type CheckinResult =
       tier: string | null;
       weekDays: number;
       monthDays: number;
+      reset: boolean;
     }
   | { ok: false; error: string };
 
@@ -636,7 +637,7 @@ export async function dailyCheckinAction(): Promise<CheckinResult> {
   const { data, error } = await supabase.rpc("daily_checkin");
   if (error) {
     const msg = /already checked in/i.test(error.message)
-      ? "Already checked in — come back in 24 hours."
+      ? "Already checked in today — come back tomorrow to keep your streak."
       : /verify your email/i.test(error.message)
         ? "Verify your email to start earning rewards."
         : error.message;
@@ -649,6 +650,7 @@ export async function dailyCheckinAction(): Promise<CheckinResult> {
     tier: string | null;
     week_days: number;
     month_days: number;
+    reset: boolean;
   };
   revalidatePath("/dashboard/buy");
   return {
@@ -659,6 +661,7 @@ export async function dailyCheckinAction(): Promise<CheckinResult> {
     tier: d.tier,
     weekDays: d.week_days,
     monthDays: d.month_days,
+    reset: !!d.reset,
   };
 }
 
