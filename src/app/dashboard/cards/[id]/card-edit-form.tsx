@@ -35,11 +35,13 @@ export function CardEditForm({
   initial,
   submitters,
   aiConfigured,
+  staff = false,
 }: {
   cardId: string;
   initial: CardEditInitial;
   submitters: Submitter[];
   aiConfigured: boolean;
+  staff?: boolean;
 }) {
   const router = useRouter();
   const [isSaving, startSave] = useTransition();
@@ -234,7 +236,8 @@ export function CardEditForm({
               </div>
             ) : (
               <p className="mt-1 text-xs text-zinc-500">
-                Confirm the identification to enable a value estimate. You set the final value.
+                Confirm the identification to enable a market-data value estimate.
+                Final values are set by APEX from market data.
               </p>
             )}
           </div>
@@ -251,6 +254,7 @@ export function CardEditForm({
         </div>
       </section>
 
+      {staff && (
       <section className="space-y-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
           Record
@@ -301,6 +305,7 @@ export function CardEditForm({
           </div>
         </div>
       </section>
+      )}
 
       {error && (
         <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">

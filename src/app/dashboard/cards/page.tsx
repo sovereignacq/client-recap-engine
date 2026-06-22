@@ -109,7 +109,7 @@ export default async function CardsListPage() {
           <ul className="border border-black/10 dark:border-white/15">
             {cards.map((c) => {
               const ship = shipByCard.get(c.id);
-              const needsDecision = c.status === "won" && !c.decided_at;
+              const isWon = c.status === "won";
               return (
                 <li key={c.id} className="border-b border-black/10 last:border-0 dark:border-white/15">
                   <Link
@@ -147,11 +147,13 @@ export default async function CardsListPage() {
                     </span>
                   </Link>
 
-                  {needsDecision && (
+                  {isWon && (
                     <WonDecision
                       cardId={c.id}
                       fmvCents={c.fmv_cents}
+                      buybackCents={0}
                       wonAt={c.won_at}
+                      decided={!!c.decided_at}
                     />
                   )}
 

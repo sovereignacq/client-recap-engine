@@ -538,12 +538,14 @@ export function NewCardForm({
                 </button>
               )}
               <p className="mt-2 text-xs text-zinc-400">
-                Estimate based on recent comparable sales, for reference only. You set the final value.
+                Estimate based on recent comparable sales and live market data.
+                APEX confirms the final value.
               </p>
             </div>
           ) : (
             <p className="mt-2 text-xs text-zinc-500">
-              Confirm the identification, then estimate a ballpark range. You always set the final value.
+              Confirm the identification, then pull a market-data value estimate.
+              Final values are set by APEX from market data.
             </p>
           )}
         </div>
@@ -554,13 +556,15 @@ export function NewCardForm({
             value={fmvNotes}
             onChange={(e) => setFmvNotes(e.target.value)}
             rows={2}
-            placeholder="Where the value came from — sold comps, agreed payout, etc."
+            placeholder="Where the value came from — market comps, catalog price, etc."
             className={INPUT}
           />
         </div>
       </section>
 
-      {/* Record */}
+      {/* Record — operator-only (intent, ownership, house pool). Customers and
+          testers never see or touch this; it controls house inventory. */}
+      {staff && (
       <section className="space-y-4">
         <h2 className={SECTION}>Record</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -626,6 +630,7 @@ export function NewCardForm({
           others as “Received.”
         </p>
       </section>
+      )}
 
       {error && <ErrorBox>{error}</ErrorBox>}
 

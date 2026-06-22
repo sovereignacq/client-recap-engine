@@ -5,6 +5,7 @@ import { logout } from "@/app/login/actions";
 import { getRole, isStaff } from "@/lib/roles";
 import { NavMenu } from "@/components/nav-menu";
 import { WarningBanner } from "./warning-banner";
+import { formatMoneyCents } from "@/lib/cards";
 
 export default async function DashboardLayout({
   children,
@@ -21,9 +22,13 @@ export default async function DashboardLayout({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("suspended_at, suspended_reason")
+    .select("suspended_at, suspended_reason, balance_cents, withdrawable_cents")
     .eq("id", user.id)
     .maybeSingle();
+
+  const balanceCents = profile?.balance_cents ?? 0;
+  const cashCents = profile?.withdrawable_cents ?? 0;
+  const bonusCents = Math.max(0, balanceCents - cashCents);
 
   const { data: warnings } = await supabase
     .from("user_warnings")
@@ -45,6 +50,14 @@ export default async function DashboardLayout({
             APEX&nbsp;TCG
           </Link>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <Link
+              href="/dashboard/buy"
+              title={`Cash ${formatMoneyCents(cashCents)} · Bonus ${formatMoneyCents(bonusCents)}`}
+              className="flex items-center gap-1.5 rounded-none border border-black/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] tabular-nums transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
+            >
+              <span className="text-zinc-400">Wallet</span>
+              <span>{formatMoneyCents(balanceCents)}</span>
+            </Link>
             <NavMenu
               links={[{ label: "Home", href: "/dashboard" }]}
               groups={[
@@ -53,7 +66,10 @@ export default async function DashboardLayout({
                   items: [
                     { label: "My cards", href: "/dashboard/cards" },
                     { label: "My collections", href: "/dashboard/collections" },
-                    { label: "Submitters", href: "/dashboard/submitters" },
+                    // Submitters is an operator concept — staff only.
+                    ...(staff
+                      ? [{ label: "Submitters", href: "/dashboard/submitters" }]
+                      : []),
                   ],
                 },
                 {

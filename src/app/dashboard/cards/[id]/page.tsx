@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getRole, isStaff } from "@/lib/roles";
 import { isAIConfigured } from "@/lib/ai/client";
 import {
   cardTitle,
@@ -31,6 +32,8 @@ export default async function CardDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const staff = isStaff(await getRole());
 
   const { data: card } = await supabase
     .from("cards")
@@ -141,18 +144,26 @@ export default async function CardDetailPage({
             )}
           </div>
           <div className="bg-white p-5 dark:bg-black">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-400">
-              Submitter
-            </p>
-            {submitter ? (
-              <Link
-                href={`/dashboard/submitters/${submitter.id}`}
-                className="mt-2 inline-block text-lg font-medium hover:underline"
-              >
-                {submitter.name}
-              </Link>
+            {staff ? (
+              <>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-400">
+                  Submitter
+                </p>
+                {submitter ? (
+                  <Link
+                    href={`/dashboard/submitters/${submitter.id}`}
+                    className="mt-2 inline-block text-lg font-medium hover:underline"
+                  >
+                    {submitter.name}
+                  </Link>
+                ) : (
+                  <p className="mt-2 text-lg text-zinc-500">— none linked —</p>
+                )}
+              </>
             ) : (
-              <p className="mt-2 text-lg text-zinc-500">— none linked —</p>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-400">
+                Grade
+              </p>
             )}
             <p className="mt-1 text-xs text-zinc-500">
               Grade: {card.grade || "—"}
@@ -276,6 +287,7 @@ export default async function CardDetailPage({
             cardId={card.id}
             submitters={submitters ?? []}
             aiConfigured={isAIConfigured()}
+            staff={staff}
             initial={{
               category: card.category,
               sport_or_game: card.sport_or_game,

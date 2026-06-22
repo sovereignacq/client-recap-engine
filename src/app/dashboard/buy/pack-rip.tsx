@@ -15,12 +15,14 @@ const DECOYS = 5; // cards flipped through before reaching the hit
  */
 export function PackRip({
   reel,
+  teasers = [],
   wonImage,
   wonLabel,
   jackpot,
   onDone,
 }: {
   reel: string[];
+  teasers?: string[];
   wonImage: string | null;
   wonLabel: string;
   jackpot: boolean;
@@ -37,11 +39,25 @@ export function PackRip({
   }, []);
 
   const decoys = useMemo(() => {
+    // Mix tier decoys with a couple of grail "teasers" — eye-candy that flashes
+    // by to build hype. Teasers are never the actual pull.
     const pool = reel.filter(Boolean);
-    return Array.from({ length: DECOYS }, (_, i) =>
-      pool.length ? pool[i % pool.length] : null,
-    );
-  }, [reel]);
+    const grails = teasers.filter(Boolean);
+    const out: (string | null)[] = [];
+    for (let i = 0; i < DECOYS; i++) {
+      // Sprinkle a grail at positions 1 and 3 when we have them.
+      if ((i === 1 || i === 3) && grails.length) {
+        out.push(grails[i % grails.length]);
+      } else if (pool.length) {
+        out.push(pool[i % pool.length]);
+      } else if (grails.length) {
+        out.push(grails[i % grails.length]);
+      } else {
+        out.push(null);
+      }
+    }
+    return out;
+  }, [reel, teasers]);
 
   // Phase timers.
   useEffect(() => {

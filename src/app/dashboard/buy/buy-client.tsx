@@ -9,6 +9,7 @@ import { ResetTimer } from "./reset-timer";
 import {
   openPackAction,
   packReelAction,
+  packTeaserImagesAction,
   topUpAction,
   sellBackAction,
   createDepositCheckoutAction,
@@ -16,6 +17,8 @@ import {
   setPlayPauseAction,
   setPlayLimitsAction,
   tradeUpAction,
+  keepCardAction,
+  undecidedCardAction,
   redeemPackCreditAction,
   dailyCheckinAction,
   dailySpinAction,
@@ -246,6 +249,7 @@ export function BuyClient({
   // Wheel-of-fortune reveal: spin → land → value count-up
   const [phase, setPhase] = useState<"wheel" | "revealed">("revealed");
   const [reel, setReel] = useState<string[]>([]);
+  const [teasers, setTeasers] = useState<string[]>([]);
   const [displayCents, setDisplayCents] = useState(0);
   const rafRef = useRef<number | null>(null);
 
@@ -284,16 +288,19 @@ export function BuyClient({
     setError(null);
     setOpeningKey(tier.key);
     startOpen(async () => {
-      const [r, reelImgs] = await Promise.all([
+      const [r, reelImgs, teaserImgs] = await Promise.all([
         openPackAction(tier.key, modeKey, categoryKey),
         packReelAction(tier.key),
+        packTeaserImagesAction(),
       ]);
       setOpeningKey(null);
       if (r.ok) {
         setBalance(r.balanceAfter);
         setPity((p) => ({ ...p, [`${categoryKey}:${tier.key}`]: r.pityCount }));
         setSold(false);
+        setDecided(null);
         setReel(reelImgs);
+        setTeasers(teaserImgs);
         setDisplayCents(0);
         setResult(r);
         setPhase("wheel");
@@ -341,6 +348,8 @@ export function BuyClient({
   const [rewardMsg, setRewardMsg] = useState<string | null>(null);
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
   const [redeemResult, setRedeemResult] = useState<Redeemed | null>(null);
+  const [redeemPhase, setRedeemPhase] = useState<"rip" | "revealed">("revealed");
+  const [redeemReel, setRedeemReel] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
 
   const tierNameMap = useMemo(
@@ -423,6 +432,14 @@ export function BuyClient({
       if (r.ok) {
         setCredits((cs) => cs.filter((c) => c.id !== creditId));
         setSold(false);
+        setDecided(null);
+        const [reelImgs, teaserImgs] = await Promise.all([
+          packReelAction(r.tierKey),
+          packTeaserImagesAction(),
+        ]);
+        setRedeemReel(reelImgs);
+        setTeasers(teaserImgs);
+        setRedeemPhase("rip");
         setRedeemResult(r);
       } else {
         setError(r.error);
@@ -447,6 +464,23 @@ export function BuyClient({
       } else {
         setError(r.error);
       }
+    });
+  };
+
+  // Keep / undecided decision on a freshly pulled card (stay in the game).
+  const [decided, setDecided] = useState<null | "kept" | "undecided">(null);
+  const keep = (cardId: string) => {
+    startSell(async () => {
+      const r = await keepCardAction(cardId);
+      if (r.ok) setDecided("kept");
+      else setError(r.error);
+    });
+  };
+  const undecided = (cardId: string) => {
+    startSell(async () => {
+      const r = await undecidedCardAction(cardId);
+      if (r.ok) setDecided("undecided");
+      else setError(r.error);
     });
   };
 
@@ -569,8 +603,14 @@ export function BuyClient({
             {formatMoneyCents(balance)}
           </p>
           <p className="text-[11px] text-zinc-500">
-            {formatMoneyCents(withdrawable)} withdrawable · rest is bonus (play
-            only)
+            <span className="text-emerald-600 dark:text-emerald-400">
+              {formatMoneyCents(withdrawable)} cash
+            </span>{" "}
+            (deposited — withdrawable) ·{" "}
+            <span className="text-amber-600 dark:text-amber-400">
+              {formatMoneyCents(Math.max(0, balance - withdrawable))} bonus
+            </span>{" "}
+            (winnings &amp; rewards — play only)
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -1073,6 +1113,7 @@ export function BuyClient({
               <div className="py-2">
                 <PackRip
                   reel={reel}
+                  teasers={teasers}
                   wonImage={result.imageUrl}
                   wonLabel={result.title}
                   jackpot={result.outcome === "above" || result.guaranteed}
@@ -1123,34 +1164,17 @@ export function BuyClient({
                   {formatMoneyCents(Math.abs(result.profitCents))}
                 </p>
 
-                {sold ? (
-                  <p className="mt-6 text-sm text-emerald-400">
-                    Sold back · wallet {formatMoneyCents(balance)}
-                  </p>
-                ) : (
-                  <div className="mt-7 flex gap-3">
-                    <button
-                      type="button"
-                      disabled={isSelling}
-                      onClick={() => sellBack(result.cardId)}
-                      className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10 disabled:opacity-40"
-                    >
-                      {isSelling ? "…" : `Sell back +${formatMoneyCents(result.buybackCents)}`}
-                    </button>
-                    <a
-                      href={`/dashboard/cards/${result.cardId}`}
-                      className="flex-1 rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200"
-                    >
-                      Keep
-                    </a>
-                  </div>
-                )}
-                {!sold && (
-                  <p className="mt-3 text-[10px] uppercase tracking-[0.15em] text-zinc-500">
-                    You have 3 days to decide — undecided cards auto-sell back to
-                    your wallet
-                  </p>
-                )}
+                <CardDecision
+                  cardId={result.cardId}
+                  buybackCents={result.buybackCents}
+                  sold={sold}
+                  decided={decided}
+                  balance={balance}
+                  isBusy={isSelling}
+                  onKeep={keep}
+                  onUndecided={undecided}
+                  onSell={sellBack}
+                />
 
                 <button
                   type="button"
@@ -1280,6 +1304,7 @@ export function BuyClient({
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
           onClick={() => {
+            if (redeemPhase === "rip") return; // don't close mid-rip
             setRedeemResult(null);
             router.refresh();
           }}
@@ -1288,6 +1313,19 @@ export function BuyClient({
             className="w-full max-w-sm overflow-hidden border border-white/15 bg-black p-8 text-center text-white animate-[fadeIn_300ms_ease-out]"
             onClick={(e) => e.stopPropagation()}
           >
+            {redeemPhase === "rip" ? (
+              <div className="py-2">
+                <PackRip
+                  reel={redeemReel}
+                  teasers={teasers}
+                  wonImage={redeemResult.imageUrl}
+                  wonLabel={redeemResult.title}
+                  jackpot={redeemResult.outcome === "above"}
+                  onDone={() => setRedeemPhase("revealed")}
+                />
+              </div>
+            ) : (
+            <>
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-300">
               Free pack opened
             </p>
@@ -1305,36 +1343,17 @@ export function BuyClient({
               Free — all yours
             </p>
 
-            {sold ? (
-              <p className="mt-6 text-sm text-emerald-400">
-                Sold back · wallet {formatMoneyCents(balance)}
-              </p>
-            ) : (
-              <div className="mt-7 flex gap-3">
-                <button
-                  type="button"
-                  disabled={isSelling}
-                  onClick={() => sellBack(redeemResult.cardId)}
-                  className="flex-1 rounded-none border border-white/25 px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-white transition hover:bg-white/10 disabled:opacity-40"
-                >
-                  {isSelling
-                    ? "…"
-                    : `Sell back +${formatMoneyCents(redeemResult.buybackCents)}`}
-                </button>
-                <a
-                  href={`/dashboard/cards/${redeemResult.cardId}`}
-                  className="flex-1 rounded-none bg-white px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-black transition hover:bg-zinc-200"
-                >
-                  Keep
-                </a>
-              </div>
-            )}
-            {!sold && (
-              <p className="mt-3 text-[10px] uppercase tracking-[0.15em] text-zinc-500">
-                You have 3 days to decide — undecided cards auto-sell back to your
-                wallet
-              </p>
-            )}
+            <CardDecision
+              cardId={redeemResult.cardId}
+              buybackCents={redeemResult.buybackCents}
+              sold={sold}
+              decided={decided}
+              balance={balance}
+              isBusy={isSelling}
+              onKeep={keep}
+              onUndecided={undecided}
+              onSell={sellBack}
+            />
             <button
               type="button"
               onClick={() => {
@@ -1345,9 +1364,94 @@ export function BuyClient({
             >
               Close
             </button>
+            </>
+            )}
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Decision controls on a freshly pulled/redeemed card: keep it (to your
+ * collection), stay undecided (collection + 72h timer), or sell it back now.
+ * The player stays in the game either way.
+ */
+function CardDecision({
+  cardId,
+  buybackCents,
+  sold,
+  decided,
+  balance,
+  isBusy,
+  onKeep,
+  onUndecided,
+  onSell,
+}: {
+  cardId: string;
+  buybackCents: number;
+  sold: boolean;
+  decided: null | "kept" | "undecided";
+  balance: number;
+  isBusy: boolean;
+  onKeep: (id: string) => void;
+  onUndecided: (id: string) => void;
+  onSell: (id: string) => void;
+}) {
+  if (sold) {
+    return (
+      <p className="mt-6 text-sm text-emerald-400">
+        Sold back · wallet {formatMoneyCents(balance)}
+      </p>
+    );
+  }
+  if (decided === "kept") {
+    return (
+      <p className="mt-6 text-sm text-emerald-400">
+        Kept — added to your collection.
+      </p>
+    );
+  }
+  if (decided === "undecided") {
+    return (
+      <p className="mt-6 text-sm text-amber-300">
+        Filed in your collection · 72 hours to keep it or sell it back.
+      </p>
+    );
+  }
+  return (
+    <>
+      <div className="mt-7 grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={() => onKeep(cardId)}
+          className="rounded-none bg-white px-2 py-2.5 text-[11px] font-medium uppercase tracking-[0.12em] text-black transition hover:bg-zinc-200 disabled:opacity-40"
+        >
+          Keep
+        </button>
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={() => onUndecided(cardId)}
+          className="rounded-none border border-white/25 px-2 py-2.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-white/10 disabled:opacity-40"
+        >
+          Undecided
+        </button>
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={() => onSell(cardId)}
+          className="rounded-none border border-white/25 px-2 py-2.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-white/10 disabled:opacity-40"
+        >
+          {isBusy ? "…" : `Sell +${formatMoneyCents(buybackCents)}`}
+        </button>
+      </div>
+      <p className="mt-3 text-[10px] uppercase tracking-[0.15em] text-zinc-500">
+        Undecided files it in your collection with a 72-hour timer — if you don&apos;t
+        choose, it auto-sells back to your wallet
+      </p>
+    </>
   );
 }

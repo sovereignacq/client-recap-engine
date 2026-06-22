@@ -29,7 +29,12 @@ export type OpenResult =
     }
   | { ok: false; error: string };
 
-const BUYBACK_PCT = 0.9;
+// Buyback value shown to the player: full FMV on a win (outcome 'above'),
+// otherwise 85% (house keeps a margin on break-even / losing pulls). Mirrors
+// the card_buyback_cents() DB function used when the sale actually happens.
+function buybackFor(fmvCents: number, outcome: string): number {
+  return outcome === "above" ? fmvCents : Math.round(fmvCents * 0.85);
+}
 
 /**
  * Open a tier pack. Charging the wallet, the odds + pity draw, and the ownership
@@ -102,7 +107,7 @@ export async function openPackAction(
     guaranteed: d.guaranteed,
     pityCount: d.pity_count,
     pityThreshold: d.pity_threshold,
-    buybackCents: Math.round(d.fmv_cents * BUYBACK_PCT),
+    buybackCents: buybackFor(d.fmv_cents, d.outcome),
     imageUrl: (card as { image_url?: string | null } | null)?.image_url ?? null,
   };
 }
@@ -115,6 +120,32 @@ export async function packReelAction(tierKey: string): Promise<string[]> {
   });
   if (error || !Array.isArray(data)) return [];
   return (data as string[]).filter(Boolean);
+}
+
+/**
+ * Grail "teaser" art for the rip animation — top-value catalog cards that flash
+ * by during the deal to build hype. These are pure eye-candy: they are never
+ * the card you actually pull (the real pull is decided server-side in open_pack).
+ */
+export async function packTeaserImagesAction(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("pokemon_cards")
+    .select("image_url")
+    .not("image_url", "is", null)
+    .not("market_cents", "is", null)
+    .order("market_cents", { ascending: false })
+    .limit(40);
+  if (error || !Array.isArray(data)) return [];
+  const urls = (data as { image_url: string | null }[])
+    .map((r) => r.image_url)
+    .filter((u): u is string => !!u);
+  // Shuffle so the same few grails don't always lead.
+  for (let i = urls.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [urls[i], urls[j]] = [urls[j], urls[i]];
+  }
+  return urls.slice(0, 10);
 }
 
 export type PlayResult = { ok: true } | { ok: false; error: string };
@@ -342,7 +373,7 @@ export async function tradeUpAction(cardIds: string[]): Promise<TradeUpResult> {
     inputCents: d.input_cents,
     tradedCount: d.traded,
     outcome: d.outcome,
-    buybackCents: Math.round(d.fmv_cents * BUYBACK_PCT),
+    buybackCents: buybackFor(d.fmv_cents, d.outcome),
   };
 }
 
@@ -371,9 +402,52 @@ export async function sellBackAction(cardId: string): Promise<SellBackResult> {
 
 export type KeepResult = { ok: true } | { ok: false; error: string };
 
+/** Find the user's default collection, creating "My Collection" if they have none. */
+async function ensureDefaultCollection(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from("collections")
+    .select("id")
+    .eq("owner_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (existing?.id) return existing.id;
+  const { data: created } = await supabase
+    .from("collections")
+    .insert({ owner_id: userId, name: "My Collection" })
+    .select("id")
+    .single();
+  return created?.id ?? null;
+}
+
+/** Add a card to the user's default collection (idempotent). */
+async function addCardToDefaultCollection(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  cardId: string,
+): Promise<void> {
+  const collectionId = await ensureDefaultCollection(supabase, userId);
+  if (!collectionId) return;
+  const { data: dupe } = await supabase
+    .from("collection_items")
+    .select("id")
+    .eq("collection_id", collectionId)
+    .eq("card_id", cardId)
+    .maybeSingle();
+  if (dupe) return;
+  await supabase.from("collection_items").insert({
+    collection_id: collectionId,
+    owner_id: userId,
+    card_id: cardId,
+  });
+}
+
 /**
- * Keep a pulled card: marks the 3-day decision as made so it won't auto-sell
- * back to the pool. The card stays in the player's collection.
+ * Keep a pulled card for good: marks the decision so it won't auto-sell back,
+ * and drops it into the player's collection so they can keep playing.
  */
 export async function keepCardAction(cardId: string): Promise<KeepResult> {
   const supabase = await createClient();
@@ -384,8 +458,39 @@ export async function keepCardAction(cardId: string): Promise<KeepResult> {
 
   const { error } = await supabase.rpc("keep_won_card", { p_card_id: cardId });
   if (error) return { ok: false, error: error.message };
+  await addCardToDefaultCollection(supabase, user.id, cardId);
   revalidatePath("/dashboard/buy");
   revalidatePath("/dashboard/cards");
+  revalidatePath("/dashboard/collections");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+/**
+ * Stay undecided: drops the card into the player's collection but leaves the
+ * 72-hour timer running. If they never choose, auto_sellback_expired_pulls()
+ * sells it back to the pool and credits their wallet.
+ */
+export async function undecidedCardAction(cardId: string): Promise<KeepResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  // Verify the card is the user's pulled card before filing it away.
+  const { data: card } = await supabase
+    .from("cards")
+    .select("id")
+    .eq("id", cardId)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+  if (!card) return { ok: false, error: "Card not found." };
+
+  await addCardToDefaultCollection(supabase, user.id, cardId);
+  revalidatePath("/dashboard/buy");
+  revalidatePath("/dashboard/cards");
+  revalidatePath("/dashboard/collections");
   revalidatePath("/dashboard");
   return { ok: true };
 }
@@ -442,6 +547,7 @@ export type RedeemResult =
       tierKey: string;
       outcome: "below" | "even" | "above";
       buybackCents: number;
+      imageUrl: string | null;
     }
   | { ok: false; error: string };
 
@@ -496,7 +602,8 @@ export async function redeemPackCreditAction(
     fmvCents: d.fmv_cents,
     tierKey: d.tier_key,
     outcome: d.outcome,
-    buybackCents: Math.round(d.fmv_cents * BUYBACK_PCT),
+    buybackCents: buybackFor(d.fmv_cents, d.outcome),
+    imageUrl: (card as { image_url?: string | null } | null)?.image_url ?? null,
   };
 }
 
