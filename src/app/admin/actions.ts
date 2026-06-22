@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRole, isStaff } from "@/lib/roles";
+import { getStripe } from "@/lib/stripe/server";
 
 const OFFER_STATUSES = [
   "draft",
@@ -22,7 +23,13 @@ const CARD_STATUSES = [
   "returned",
 ] as const;
 
-/** Staff: settle a withdrawal request. Rejecting refunds the held funds. */
+/**
+ * Staff: settle a withdrawal request.
+ * - "paid": sends the money for real via a Stripe Connect transfer to the
+ *   payee's verified connected account, then marks the request paid. The wallet
+ *   was already debited (held) at request time, so marking paid only finalizes.
+ * - "rejected": refunds the held funds to the user's withdrawable balance.
+ */
 export async function adminProcessWithdrawal(
   id: string,
   status: "paid" | "rejected",
@@ -33,6 +40,59 @@ export async function adminProcessWithdrawal(
     return { error: "Invalid status." };
   }
   const supabase = await createClient();
+
+  if (status === "paid") {
+    // Load the request and payee's connected account.
+    const { data: req } = await supabase
+      .from("withdrawal_requests")
+      .select("id, user_id, amount_cents, status")
+      .eq("id", id)
+      .maybeSingle();
+    if (!req) return { error: "Request not found." };
+    if (req.status !== "pending") return { error: "Already processed." };
+
+    const { data: payee } = await supabase
+      .from("profiles")
+      .select("stripe_connect_id, connect_payouts_enabled")
+      .eq("id", req.user_id)
+      .maybeSingle();
+    if (!payee?.stripe_connect_id || !payee.connect_payouts_enabled) {
+      return {
+        error: "Payee hasn't finished payout setup (identity not verified yet).",
+      };
+    }
+
+    // Send the payout. Stripe pays out from the connected account's balance to
+    // their bank on its normal schedule once the transfer lands.
+    let transferId: string;
+    try {
+      const transfer = await getStripe().transfers.create({
+        amount: req.amount_cents,
+        currency: "usd",
+        destination: payee.stripe_connect_id,
+        metadata: { withdrawal_id: req.id, supabase_user_id: req.user_id },
+      });
+      transferId = transfer.id;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Stripe transfer failed.";
+      return { error: `Payout failed: ${msg}` };
+    }
+
+    const { error } = await supabase.rpc("process_withdrawal", {
+      p_id: id,
+      p_status: "paid",
+      p_note: note ?? null,
+    });
+    if (error) return { error: error.message };
+    await supabase
+      .from("withdrawal_requests")
+      .update({ stripe_transfer_id: transferId })
+      .eq("id", id);
+    revalidatePath("/admin/withdrawals");
+    return;
+  }
+
+  // Rejection path: refund the hold.
   const { error } = await supabase.rpc("process_withdrawal", {
     p_id: id,
     p_status: status,

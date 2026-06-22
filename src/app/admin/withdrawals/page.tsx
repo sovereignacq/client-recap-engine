@@ -62,9 +62,11 @@ export default async function AdminWithdrawalsPage() {
         </div>
 
         <p className="text-sm text-zinc-500">
-          Funds are already held when a request is made. Send the payout via the
-          customer&apos;s chosen method, then mark it paid. Rejecting refunds the
-          held amount to their withdrawable balance.
+          Funds are held when a request is made and the payee is identity-verified
+          via Stripe Connect. <strong>Mark paid</strong> sends the money for real
+          (a Stripe transfer to their verified bank) and finalizes the request;
+          <strong> Reject</strong> refunds the held amount to their withdrawable
+          balance.
         </p>
 
         {requests.length > 0 ? (
