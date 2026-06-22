@@ -144,6 +144,63 @@ export async function poolStockAction(
   return out;
 }
 
+type HotlistPick = {
+  tierKey: string;
+  tierName: string;
+  bandLabel: string;
+  loCents: number;
+  hiCents: number;
+  catalogId: string;
+  name: string;
+  setName: string;
+  number: string;
+  rarity: string;
+  imageUrl: string | null;
+  marketCents: number;
+  poolCnt: number;
+};
+
+/** Staff: sourcing hotlist of sought-after cards to acquire, per tier band. */
+export async function getHotlistAction(perBand = 3): Promise<HotlistPick[]> {
+  if (!isStaff(await getRole())) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("inventory_hotlist", {
+    p_per_band: perBand,
+  });
+  if (error || !Array.isArray(data)) return [];
+  return (
+    data as {
+      tier_key: string;
+      tier_name: string;
+      band_label: string;
+      lo_cents: number;
+      hi_cents: number;
+      catalog_id: string;
+      name: string;
+      set_name: string | null;
+      number: string | null;
+      rarity: string | null;
+      image_url: string | null;
+      market_cents: number;
+      pool_cnt: number;
+    }[]
+  ).map((r) => ({
+    tierKey: r.tier_key,
+    tierName: r.tier_name,
+    bandLabel: r.band_label,
+    loCents: r.lo_cents,
+    hiCents: r.hi_cents,
+    catalogId: r.catalog_id,
+    name: r.name,
+    setName: r.set_name ?? "",
+    number: r.number ?? "",
+    rarity: r.rarity ?? "",
+    imageUrl: r.image_url,
+    marketCents: r.market_cents,
+    poolCnt: r.pool_cnt,
+  }));
+}
+
 const GRADING_COMPANIES = ["PSA", "BGS", "CGC", "SGC", "TAG", "Other"];
 
 /** Staff: stock a graded slab into the pack pool so it can be won in Apex Play. */
