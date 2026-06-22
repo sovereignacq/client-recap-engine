@@ -298,6 +298,264 @@ export async function dedupePoolAction(): Promise<{
   return { ok: true, removed: typeof data === "number" ? data : 0 };
 }
 
+// ============ Auto-correct negative pull economics ============
+
+// Target house edge we restore a losing tier to.
+const FIX_TARGET_MARGIN = 0.1;
+
+type OddsBucket = {
+  key?: string;
+  label: string;
+  weight: number;
+  min_mult: number;
+  max_mult: number;
+  [k: string]: unknown;
+};
+
+type FixChange = { label: string; from: string; to: string };
+
+type EconFixPlan = {
+  tierKey: string;
+  tierName: string;
+  kind: "reweight" | "price";
+  priceCents: number;
+  evCents: number; // average payout before the fix
+  marginCents: number; // house margin before (negative)
+  afterEvCents: number;
+  afterMarginCents: number;
+  afterMarginPct: number;
+  why: string;
+  what: string;
+  changes: FixChange[];
+};
+
+type FixBand = {
+  bandOrd: number;
+  label: string;
+  weight: number;
+  poolCnt: number;
+  avgFmvCents: number;
+};
+
+function pct(part: number, whole: number): number {
+  return whole > 0 ? Math.round((part / whole) * 1000) / 10 : 0;
+}
+
+/**
+ * Pure planner: given a tier's price, odds buckets and live band stats, work out
+ * how to bring a money-losing tier back to a healthy margin — by reweighting the
+ * odds toward cheaper bands where that's enough, otherwise by raising the price.
+ * Returns the human explanation plus the concrete payload to persist.
+ */
+function buildTierFix(
+  tier: { key: string; name: string; priceCents: number; odds: OddsBucket[] },
+  bands: FixBand[],
+): { plan: EconFixPlan; newOdds?: OddsBucket[]; newPriceCents?: number } | null {
+  const price = tier.priceCents;
+  const stocked = bands.filter((b) => b.poolCnt > 0);
+  if (price <= 0 || stocked.length === 0) return null;
+
+  const W = stocked.reduce((s, b) => s + b.weight, 0);
+  if (W <= 0) return null;
+  const ev0 = stocked.reduce((s, b) => s + (b.weight / W) * b.avgFmvCents, 0);
+  const margin0 = price - ev0;
+  if (margin0 >= 0) return null; // only correct tiers that actually lose money
+
+  const target = price * (1 - FIX_TARGET_MARGIN);
+  const cheapest = stocked.reduce((a, b) => (b.avgFmvCents < a.avgFmvCents ? b : a));
+  const drag = stocked.reduce((a, b) =>
+    (b.weight / W) * b.avgFmvCents > (a.weight / W) * a.avgFmvCents ? b : a,
+  );
+
+  const whyBase =
+    `${tier.name} loses ${money(Math.round(Math.abs(margin0)))} per pull: the ` +
+    `average payout (${money(Math.round(ev0))}) is above the ${money(price)} ` +
+    `pack price. Biggest drag is the ${drag.label} band — ` +
+    `${pct(drag.weight, W).toFixed(0)}% of pulls at ${money(drag.avgFmvCents)}.`;
+
+  // Reweighting can only help if the cheapest stocked band sits at/below target
+  // and there's more than one band to move probability between.
+  if (cheapest.avgFmvCents <= target && stocked.length >= 2) {
+    const pMin = cheapest.weight / W;
+    let f = (ev0 - target) / (ev0 - cheapest.avgFmvCents);
+    f = Math.max(0, Math.min(1, f));
+
+    const newWeightByOrd = new Map<number, number>();
+    for (const b of stocked) {
+      const p =
+        b.bandOrd === cheapest.bandOrd
+          ? pMin + f * (1 - pMin)
+          : (b.weight / W) * (1 - f);
+      // Preserve the stocked weight sum so empty bands and renormalization are
+      // undisturbed; keep at least weight 1 so a band never fully disappears.
+      newWeightByOrd.set(b.bandOrd, Math.max(1, Math.round(p * W)));
+    }
+
+    const sumNew = [...newWeightByOrd.values()].reduce((s, w) => s + w, 0);
+    const afterEv = stocked.reduce(
+      (s, b) => s + ((newWeightByOrd.get(b.bandOrd) ?? b.weight) / sumNew) * b.avgFmvCents,
+      0,
+    );
+    const afterMargin = price - afterEv;
+
+    // If rounding left it still negative, fall through to the price fix below.
+    if (afterMargin >= 0) {
+      const changes: FixChange[] = stocked
+        .filter((b) => (newWeightByOrd.get(b.bandOrd) ?? b.weight) !== b.weight)
+        .map((b) => ({
+          label: `${b.label} band odds`,
+          from: `${b.weight}%`,
+          to: `${newWeightByOrd.get(b.bandOrd)}%`,
+        }));
+
+      const newOdds = tier.odds.map((bucket, i) => {
+        const w = newWeightByOrd.get(i + 1);
+        return w !== undefined ? { ...bucket, weight: w } : bucket;
+      });
+
+      const plan: EconFixPlan = {
+        tierKey: tier.key,
+        tierName: tier.name,
+        kind: "reweight",
+        priceCents: price,
+        evCents: Math.round(ev0),
+        marginCents: Math.round(margin0),
+        afterEvCents: Math.round(afterEv),
+        afterMarginCents: Math.round(afterMargin),
+        afterMarginPct: pct(afterMargin, price),
+        why: whyBase,
+        what:
+          `Shift pull odds toward the cheaper ${cheapest.label} band so the ` +
+          `average payout falls to ~${money(Math.round(afterEv))} and the house ` +
+          `keeps ${money(Math.round(afterMargin))} (+${pct(afterMargin, price)}%) ` +
+          `per pull. Pack price is unchanged.`,
+        changes,
+      };
+      return { plan, newOdds };
+    }
+  }
+
+  // Price fix: even the cheapest stocked band pays above a healthy price.
+  const newPrice = Math.ceil(ev0 / (1 - FIX_TARGET_MARGIN));
+  const afterMargin = newPrice - ev0;
+  const plan: EconFixPlan = {
+    tierKey: tier.key,
+    tierName: tier.name,
+    kind: "price",
+    priceCents: price,
+    evCents: Math.round(ev0),
+    marginCents: Math.round(margin0),
+    afterEvCents: Math.round(ev0),
+    afterMarginCents: Math.round(afterMargin),
+    afterMarginPct: pct(afterMargin, newPrice),
+    why: whyBase,
+    what:
+      `Raise the pack price from ${money(price)} to ${money(newPrice)} so the ` +
+      `${money(Math.round(ev0))} average payout leaves a ${money(Math.round(afterMargin))} ` +
+      `(+${FIX_TARGET_MARGIN * 100}%) margin. Odds can't fix this alone — even the ` +
+      `cheapest stocked band (${cheapest.label} at ${money(cheapest.avgFmvCents)}) pays ` +
+      `above a healthy price.`,
+    changes: [{ label: "Pack price", from: money(price), to: money(newPrice) }],
+  };
+  return { plan, newPriceCents: newPrice };
+}
+
+/** Load per-tier fix payloads from the live pool + odds (shared by get/apply). */
+async function loadTierFixes(): Promise<
+  ReturnType<typeof buildTierFix>[]
+> {
+  const supabase = await createClient();
+  const [{ data: bandData }, { data: tierData }] = await Promise.all([
+    supabase.rpc("tier_pull_economics_bands"),
+    supabase.from("pack_tiers").select("key, name, price_cents, odds, sort_order"),
+  ]);
+  if (!Array.isArray(bandData) || !Array.isArray(tierData)) return [];
+
+  const bandsByTier = new Map<string, FixBand[]>();
+  for (const r of bandData as {
+    tier_key: string;
+    band_ord: number;
+    band_label: string;
+    weight: number;
+    pool_cnt: number;
+    avg_fmv_cents: number;
+  }[]) {
+    const arr = bandsByTier.get(r.tier_key) ?? [];
+    arr.push({
+      bandOrd: r.band_ord,
+      label: r.band_label,
+      weight: Number(r.weight),
+      poolCnt: r.pool_cnt,
+      avgFmvCents: r.avg_fmv_cents,
+    });
+    bandsByTier.set(r.tier_key, arr);
+  }
+
+  const tiers = (tierData as {
+    key: string;
+    name: string;
+    price_cents: number;
+    odds: OddsBucket[];
+    sort_order: number;
+  }[]).sort((a, b) => a.sort_order - b.sort_order);
+
+  const out: ReturnType<typeof buildTierFix>[] = [];
+  for (const t of tiers) {
+    const fix = buildTierFix(
+      { key: t.key, name: t.name, priceCents: t.price_cents, odds: t.odds ?? [] },
+      bandsByTier.get(t.key) ?? [],
+    );
+    if (fix) out.push(fix);
+  }
+  return out;
+}
+
+/** Fix plans for every tier that is currently losing money on a pull. */
+export async function getEconomicsFixPlansAction(): Promise<EconFixPlan[]> {
+  if (!isStaff(await getRole())) return [];
+  const fixes = await loadTierFixes();
+  return fixes.flatMap((f) => (f ? [f.plan] : []));
+}
+
+/**
+ * Apply the auto-correction for one tier (or all). Recomputes server-side so it
+ * always acts on the current pool, never on a stale client payload.
+ */
+export async function applyEconomicsFixAction(
+  tierKey?: string,
+): Promise<{ ok: boolean; applied: number; error?: string }> {
+  if (!isStaff(await getRole())) return { ok: false, applied: 0, error: "Not authorized." };
+  const supabase = await createClient();
+  const fixes = await loadTierFixes();
+  const targets = fixes.filter(
+    (f): f is NonNullable<typeof f> => !!f && (!tierKey || f.plan.tierKey === tierKey),
+  );
+  if (targets.length === 0) {
+    return { ok: false, applied: 0, error: "Nothing to fix — no tier is losing money." };
+  }
+
+  let applied = 0;
+  for (const f of targets) {
+    const patch =
+      f.newOdds !== undefined
+        ? { odds: f.newOdds }
+        : f.newPriceCents !== undefined
+          ? { price_cents: f.newPriceCents }
+          : null;
+    if (!patch) continue;
+    const { error } = await supabase
+      .from("pack_tiers")
+      .update(patch)
+      .eq("key", f.plan.tierKey);
+    if (error) return { ok: false, applied, error: error.message };
+    applied += 1;
+  }
+
+  revalidatePath("/admin/economics");
+  revalidatePath("/dashboard/buy");
+  return { ok: true, applied };
+}
+
 export async function adminUpdateMode(
   key: string,
   weightMults: { below: number; even: number; above: number; jackpot: number },
