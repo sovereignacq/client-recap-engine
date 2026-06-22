@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { EconomicsTuner, type TunerTier, type TunerMode } from "./tuner";
 import { PoolEconomics } from "./pool-economics";
-import { getPoolEconomicsAction } from "./actions";
+import { getPoolEconomicsAction, getStockingPlanAction } from "./actions";
 
 export default async function AdminEconomicsPage() {
   const supabase = await createClient();
@@ -32,7 +32,10 @@ export default async function AdminEconomicsPage() {
     weightMults: (m.weight_mults as Record<string, number>) ?? {},
   }));
 
-  const poolEcon = await getPoolEconomicsAction();
+  const [poolEcon, stockingPlan] = await Promise.all([
+    getPoolEconomicsAction(),
+    getStockingPlanAction(),
+  ]);
 
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-12">
@@ -44,7 +47,7 @@ export default async function AdminEconomicsPage() {
             you save. Positive = the house keeps that share long-run.
           </p>
         </div>
-        <PoolEconomics initial={poolEcon} />
+        <PoolEconomics initial={poolEcon} initialPlan={stockingPlan} />
 
         <EconomicsTuner tiers={tiers} modes={modes} buybackPct={0.8} />
       </div>

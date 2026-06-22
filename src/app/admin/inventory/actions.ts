@@ -61,18 +61,19 @@ export async function searchPoolCardsAction(
 }
 
 export type AddPoolResult =
-  | { ok: true; valued: boolean }
+  | { ok: true; valued: boolean; added: number }
   | { ok: false; error: string };
 
 /**
- * Staff: add a searched card straight into the house pack pool, with its market
- * price auto-filled as FMV — no photo, no manual research. House-owned so
- * open_pack can draw it.
+ * Staff: add one or more copies of a searched card into the house pack pool,
+ * with its market price auto-filled as FMV. House-owned so open_pack can draw it.
  */
 export async function addPoolCardFromSearchAction(
   card: PokemonSearchResult,
+  quantity = 1,
 ): Promise<AddPoolResult> {
   if (!isStaff(await getRole())) return { ok: false, error: "Not authorized." };
+  const qty = Math.max(1, Math.min(100, Math.round(quantity || 1)));
   const supabase = await createClient();
 
   const { data: ownerUuid } = await supabase.rpc("app_owner_id");
@@ -95,8 +96,9 @@ export async function addPoolCardFromSearchAction(
     rarity = rarity || det.rarity;
   }
 
-  const { error } = await supabase.from("cards").insert({
+  const base = {
     owner_id: ownerUuid,
+    catalog_id: card.id,
     category: "tcg",
     sport_or_game: "Pokémon",
     player_or_character: card.name,
@@ -112,12 +114,34 @@ export async function addPoolCardFromSearchAction(
     status: "inventory",
     in_inventory: true,
     image_url: card.imageUrl,
-  });
+  };
+  const rows = Array.from({ length: qty }, () => ({ ...base }));
+
+  const { error } = await supabase.from("cards").insert(rows);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/admin/inventory");
   revalidatePath("/admin");
-  return { ok: true, valued: fmvCents !== null };
+  return { ok: true, valued: fmvCents !== null, added: qty };
+}
+
+/** Staff: current pool copy-counts for a set of catalog cards. */
+export async function poolStockAction(
+  ids: string[],
+): Promise<Record<string, number>> {
+  if (!isStaff(await getRole())) return {};
+  const local = ids.filter((id) => !id.startsWith("tg:"));
+  if (local.length === 0) return {};
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("pool_stock_for_catalog", {
+    p_ids: local,
+  });
+  if (error || !Array.isArray(data)) return {};
+  const out: Record<string, number> = {};
+  for (const r of data as { catalog_id: string; cnt: number }[]) {
+    out[r.catalog_id] = r.cnt;
+  }
+  return out;
 }
 
 const GRADING_COMPANIES = ["PSA", "BGS", "CGC", "SGC", "TAG", "Other"];
@@ -163,6 +187,7 @@ export async function addSlabToPoolAction(
 
   const { error } = await supabase.from("cards").insert({
     owner_id: ownerUuid,
+    catalog_id: card.id,
     category: "tcg",
     sport_or_game: "Pokémon",
     player_or_character: card.name,
@@ -186,7 +211,7 @@ export async function addSlabToPoolAction(
   revalidatePath("/admin/slabs");
   revalidatePath("/admin/inventory");
   revalidatePath("/admin");
-  return { ok: true, valued: true };
+  return { ok: true, valued: true, added: 1 };
 }
 
 /** Preview a slab's value from the price database (raw price × grade multiplier). */

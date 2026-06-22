@@ -2,7 +2,15 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { formatMoneyCents } from "@/lib/cards";
-import { getPoolEconomicsAction } from "./actions";
+import { getPoolEconomicsAction, getStockingPlanAction } from "./actions";
+
+export type StockSegment = {
+  loCents: number;
+  hiCents: number;
+  poolCnt: number;
+  tiers: string[];
+  targetCnt: number;
+};
 
 export type EconBand = {
   label: string;
@@ -12,6 +20,7 @@ export type EconBand = {
   probPct: number;
   poolCnt: number;
   avgFmvCents: number;
+  targetCnt: number;
 };
 
 export type PoolEconRow = {
@@ -32,15 +41,26 @@ export type PoolEconRow = {
  * cards stocked in each, the average payout, the house margin, and owner
  * guidance on what to stock. Recomputes from the live pool (auto + on demand).
  */
-export function PoolEconomics({ initial }: { initial: PoolEconRow[] }) {
+export function PoolEconomics({
+  initial,
+  initialPlan,
+}: {
+  initial: PoolEconRow[];
+  initialPlan: StockSegment[];
+}) {
   const [rows, setRows] = useState<PoolEconRow[]>(initial);
+  const [plan, setPlan] = useState<StockSegment[]>(initialPlan);
   const [updatedAt, setUpdatedAt] = useState<Date>(new Date());
   const [pending, start] = useTransition();
 
   const refresh = () =>
     start(async () => {
-      const r = (await getPoolEconomicsAction()) as PoolEconRow[];
+      const [r, p] = await Promise.all([
+        getPoolEconomicsAction() as Promise<PoolEconRow[]>,
+        getStockingPlanAction() as Promise<StockSegment[]>,
+      ]);
       setRows(r);
+      setPlan(p);
       setUpdatedAt(new Date());
     });
 
@@ -126,7 +146,7 @@ export function PoolEconomics({ initial }: { initial: PoolEconRow[] }) {
                   <th className="px-4 py-1.5 font-medium">Band ($)</th>
                   <th className="px-2 py-1.5 text-right font-medium">Odds</th>
                   <th className="px-2 py-1.5 text-right font-medium">Chance now</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Cards</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Cards / target</th>
                   <th className="px-4 py-1.5 text-right font-medium">Avg value</th>
                 </tr>
               </thead>
@@ -147,10 +167,13 @@ export function PoolEconomics({ initial }: { initial: PoolEconRow[] }) {
                       </td>
                       <td
                         className={`px-2 py-1.5 text-right tabular-nums ${
-                          b.poolCnt === 0 ? "text-zinc-400" : ""
+                          b.poolCnt < b.targetCnt
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-emerald-600 dark:text-emerald-400"
                         }`}
                       >
                         {b.poolCnt}
+                        <span className="text-zinc-400"> / {b.targetCnt}</span>
                       </td>
                       <td
                         className={`px-4 py-1.5 text-right tabular-nums ${
@@ -202,6 +225,57 @@ export function PoolEconomics({ initial }: { initial: PoolEconRow[] }) {
         that currently have cards (empty bands can&apos;t be pulled). Red avg value
         = that band pays out above the pack price.
       </p>
+
+      {/* Consolidated stocking plan — tiers share one pool, so plan by value once. */}
+      <div className="mt-8 border-t border-black/10 pt-6 dark:border-white/15">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+          Stocking plan by value (shared across tiers)
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Every tier draws from the same pool, so their bands overlap. A card in
+          a price range counts for <em>all</em> the tiers listed — stock by value
+          range here once, instead of per tier, to avoid double-buying.
+        </p>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-black/10 text-left text-[10px] uppercase tracking-[0.12em] text-zinc-400 dark:border-white/15">
+                <th className="py-2 pr-3 font-medium">Value range</th>
+                <th className="py-2 pr-3 font-medium">Feeds tiers</th>
+                <th className="py-2 pr-3 text-right font-medium">Cards / target</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plan.map((s, i) => {
+                const short = s.poolCnt < s.targetCnt;
+                return (
+                  <tr
+                    key={i}
+                    className="border-b border-black/5 last:border-0 dark:border-white/10"
+                  >
+                    <td className="py-2 pr-3 tabular-nums">
+                      {formatMoneyCents(s.loCents)} – {formatMoneyCents(s.hiCents)}
+                    </td>
+                    <td className="py-2 pr-3 text-xs text-zinc-500">
+                      {s.tiers.join(", ")}
+                    </td>
+                    <td
+                      className={`py-2 pr-3 text-right tabular-nums ${
+                        short
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-emerald-600 dark:text-emerald-400"
+                      }`}
+                    >
+                      {s.poolCnt}
+                      <span className="text-zinc-400"> / {s.targetCnt}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </section>
   );
 }

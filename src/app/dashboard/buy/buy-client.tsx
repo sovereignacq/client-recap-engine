@@ -618,11 +618,11 @@ export function BuyClient({
             <span className="text-emerald-600 dark:text-emerald-400">
               {formatMoneyCents(withdrawable)} cash
             </span>{" "}
-            (deposited — withdrawable) ·{" "}
+            (deposits + winnings from cash play — withdrawable) ·{" "}
             <span className="text-amber-600 dark:text-amber-400">
               {formatMoneyCents(Math.max(0, balance - withdrawable))} bonus
             </span>{" "}
-            (winnings &amp; rewards — play only)
+            (rewards &amp; bonus-funded winnings — play only)
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
