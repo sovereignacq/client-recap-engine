@@ -319,6 +319,7 @@ export type TradeUpResult =
       tradedCount: number;
       outcome: "below" | "even" | "above";
       buybackCents: number;
+      imageUrl: string | null;
     }
   | { ok: false; error: string };
 
@@ -374,6 +375,7 @@ export async function tradeUpAction(cardIds: string[]): Promise<TradeUpResult> {
     tradedCount: d.traded,
     outcome: d.outcome,
     buybackCents: buybackFor(d.fmv_cents, d.outcome),
+    imageUrl: (card as { image_url?: string | null } | null)?.image_url ?? null,
   };
 }
 

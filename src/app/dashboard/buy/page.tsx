@@ -197,7 +197,7 @@ export default async function BuyPage() {
   const { data: ownedRows } = await supabase
     .from("cards")
     .select(
-      "id, serial, fmv_cents, auto_grade_label, card_year, manufacturer, set_name, player_or_character, card_number, variant",
+      "id, serial, fmv_cents, auto_grade_label, image_url, card_year, manufacturer, set_name, player_or_character, card_number, variant",
     )
     .eq("owner_id", user.id)
     .in("status", ["won", "received", "identified", "graded"])
@@ -214,6 +214,7 @@ export default async function BuyPage() {
     fmvCents: c.fmv_cents ?? 0,
     grade: c.auto_grade_label ?? null,
     title: cardTitle(c),
+    imageUrl: c.image_url ?? null,
   }));
 
   const { data: openings } = await supabase
