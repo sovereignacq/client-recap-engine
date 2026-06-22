@@ -489,6 +489,8 @@ export async function undecidedCardAction(cardId: string): Promise<KeepResult> {
     .maybeSingle();
   if (!card) return { ok: false, error: "Card not found." };
 
+  // "Undecided" still counts as finishing the reveal — surface it in live pulls.
+  await supabase.rpc("mark_pull_revealed", { p_card_id: cardId });
   await addCardToDefaultCollection(supabase, user.id, cardId);
   revalidatePath("/dashboard/buy");
   revalidatePath("/dashboard/cards");

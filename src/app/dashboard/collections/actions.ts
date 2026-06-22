@@ -111,7 +111,6 @@ export async function addSlabAction(
     gradingCompany: string;
     grade: string;
     certNumber?: string;
-    valueCents?: number | null;
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await createClient();
@@ -130,15 +129,17 @@ export async function addSlabAction(
 
   const { data: cat } = await supabase
     .from("pokemon_cards")
-    .select("name, set_name, number, image_url, market_cents")
+    .select("name, set_name, number, image_url")
     .eq("id", input.catalogId)
     .maybeSingle();
   if (!cat) return { ok: false, error: "Pick a card from the catalog first." };
 
-  const valueCents =
-    typeof input.valueCents === "number" && input.valueCents >= 0
-      ? Math.round(input.valueCents)
-      : (cat.market_cents ?? null);
+  // Value comes from the slab price database (raw price × grade multiplier).
+  const { data: valueCents } = await supabase.rpc("slab_value_cents", {
+    p_catalog_id: input.catalogId,
+    p_company: company,
+    p_grade: grade,
+  });
 
   const { data: card, error: cardErr } = await supabase
     .from("cards")
@@ -155,9 +156,9 @@ export async function addSlabAction(
       grade,
       cert_number: input.certNumber?.trim() || null,
       id_status: "confirmed",
-      fmv_cents: valueCents,
+      fmv_cents: typeof valueCents === "number" ? valueCents : null,
       fmv_source: "slab",
-      fmv_notes: `${company} ${grade} slab`,
+      fmv_notes: `${company} ${grade} slab · auto-valued`,
       intent: "grade",
       status: "graded",
       in_inventory: false,
@@ -176,6 +177,23 @@ export async function addSlabAction(
   revalidatePath(`/dashboard/collections/${collectionId}`);
   revalidatePath("/dashboard/cards");
   return { ok: true };
+}
+
+/** Look up a slab's value from the price database (for live preview in the UI). */
+export async function lookupSlabValueAction(
+  catalogId: string,
+  company: string,
+  grade: string,
+): Promise<number | null> {
+  if (!catalogId || !grade.trim()) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("slab_value_cents", {
+    p_catalog_id: catalogId,
+    p_company: company,
+    p_grade: grade.trim(),
+  });
+  if (error) return null;
+  return typeof data === "number" ? data : null;
 }
 
 export async function removeItemAction(

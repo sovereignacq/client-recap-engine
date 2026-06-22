@@ -125,7 +125,7 @@ const GRADING_COMPANIES = ["PSA", "BGS", "CGC", "SGC", "TAG", "Other"];
 /** Staff: stock a graded slab into the pack pool so it can be won in Apex Play. */
 export async function addSlabToPoolAction(
   card: PokemonSearchResult,
-  details: { gradingCompany: string; grade: string; certNumber?: string; valueCents?: number | null },
+  details: { gradingCompany: string; grade: string; certNumber?: string },
 ): Promise<AddPoolResult> {
   if (!isStaff(await getRole())) return { ok: false, error: "Not authorized." };
   const grade = details.grade.trim();
@@ -140,22 +140,25 @@ export async function addSlabToPoolAction(
     return { ok: false, error: "No house owner configured." };
   }
 
-  let fmvCents =
-    typeof details.valueCents === "number" && details.valueCents > 0
-      ? Math.round(details.valueCents)
-      : typeof card.marketPriceCents === "number" && card.marketPriceCents > 0
-        ? card.marketPriceCents
-        : null;
+  // Value comes from the slab price database (raw price × grade multiplier).
+  const { data: valued } = await supabase.rpc("slab_value_cents", {
+    p_catalog_id: card.id,
+    p_company: company,
+    p_grade: grade,
+  });
+  const fmvCents = typeof valued === "number" && valued > 0 ? valued : null;
   let setName = card.setName;
 
   if (card.id.startsWith("tg:")) {
     const det = await tcgdexDetail(card.id.slice(3));
-    if (fmvCents == null) fmvCents = det.priceCents;
     setName = setName || det.setName;
   }
 
   if (fmvCents == null || fmvCents <= 0) {
-    return { ok: false, error: "Enter a value — slabs need an FMV to be pulled." };
+    return {
+      ok: false,
+      error: "No market price for this card, so the slab can't be auto-valued.",
+    };
   }
 
   const { error } = await supabase.from("cards").insert({
@@ -184,4 +187,22 @@ export async function addSlabToPoolAction(
   revalidatePath("/admin/inventory");
   revalidatePath("/admin");
   return { ok: true, valued: true };
+}
+
+/** Preview a slab's value from the price database (raw price × grade multiplier). */
+export async function slabValuePreviewAction(
+  catalogId: string,
+  company: string,
+  grade: string,
+): Promise<number | null> {
+  if (!isStaff(await getRole())) return null;
+  if (!catalogId || !grade.trim()) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("slab_value_cents", {
+    p_catalog_id: catalogId,
+    p_company: company,
+    p_grade: grade.trim(),
+  });
+  if (error) return null;
+  return typeof data === "number" ? data : null;
 }
