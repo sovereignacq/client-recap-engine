@@ -62,11 +62,10 @@ export default async function AdminWithdrawalsPage() {
         </div>
 
         <p className="text-sm text-zinc-500">
-          Funds are held when a request is made and the payee is identity-verified
-          via Stripe Connect. <strong>Mark paid</strong> sends the money for real
-          (a Stripe transfer to their verified bank) and finalizes the request;
-          <strong> Reject</strong> refunds the held amount to their withdrawable
-          balance.
+          Funds are held when a request is made. <strong>Mark paid</strong> sends
+          the money for real (a PayPal payout to the email on the request) and
+          finalizes it; <strong>Reject</strong> refunds the held amount to their
+          withdrawable balance.
         </p>
 
         {requests.length > 0 ? (

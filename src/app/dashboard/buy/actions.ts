@@ -530,8 +530,8 @@ export async function requestWithdrawalAction(
       ? "That's more than your withdrawable balance (bonus money can't be cashed out)."
       : /minimum withdrawal/i.test(error.message)
         ? "Minimum withdrawal is $5."
-        : /set up payouts/i.test(error.message)
-          ? "Set up payouts (verify your identity) before withdrawing."
+        : /paypal email/i.test(error.message)
+          ? "Enter the PayPal email to send your payout to."
           : /taking a break/i.test(error.message)
             ? "You're taking a break — withdrawals are paused."
             : error.message;

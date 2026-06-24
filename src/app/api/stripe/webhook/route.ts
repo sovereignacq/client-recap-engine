@@ -122,19 +122,6 @@ export async function POST(request: Request) {
         break;
       }
 
-      case "account.updated": {
-        // Keep a payee's Connect verification/payout state in sync (KYC).
-        const account = event.data.object as Stripe.Account;
-        await admin
-          .from("profiles")
-          .update({
-            connect_details_submitted: !!account.details_submitted,
-            connect_payouts_enabled: !!account.payouts_enabled,
-          })
-          .eq("stripe_connect_id", account.id);
-        break;
-      }
-
       default:
         // Ignore other events for now
         break;
