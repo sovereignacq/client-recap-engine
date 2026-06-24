@@ -92,7 +92,7 @@ export default async function BuyPage() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "balance_cents, withdrawable_cents, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents, referral_code, checkin_streak, checkin_total, last_checkin_at, last_checkin_on, last_spin_at, stripe_connect_id, connect_details_submitted, connect_payouts_enabled",
+      "balance_cents, withdrawable_cents, age_confirmed_at, play_paused_until, daily_spend_limit_cents, daily_deposit_limit_cents, referral_code, checkin_streak, checkin_total, last_checkin_at, last_checkin_on, last_spin_at",
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -106,17 +106,20 @@ export default async function BuyPage() {
       ? profile.play_paused_until
       : null;
 
-  // The daily check-in runs on calendar days (UTC): one per day, and the streak
-  // resets if a day is missed. It unlocks again at the next UTC midnight.
+  // Daily check-in: one per 24h. The streak only resets if more than a day
+  // passes without a check-in (handled server-side), so this is a simple 24h
+  // cooldown from the last check-in time.
   const COOLDOWN_MS = 24 * 60 * 60 * 1000;
   const nowMs = new Date().getTime();
-  const todayUtc = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
-  const lastCheckinOn = (profile?.last_checkin_on as string | null) ?? null;
-  const checkinClaimable = !lastCheckinOn || lastCheckinOn < todayUtc;
-  const nextUtcMidnight = `${todayUtc}T00:00:00.000Z`;
-  const checkinNextAt = checkinClaimable
-    ? null
-    : new Date(new Date(nextUtcMidnight).getTime() + COOLDOWN_MS).toISOString();
+  const checkinClaimable =
+    !profile?.last_checkin_at ||
+    nowMs - new Date(profile.last_checkin_at).getTime() >= COOLDOWN_MS;
+  const checkinNextAt =
+    !checkinClaimable && profile?.last_checkin_at
+      ? new Date(
+          new Date(profile.last_checkin_at).getTime() + COOLDOWN_MS,
+        ).toISOString()
+      : null;
   const spinClaimable =
     !profile?.last_spin_at ||
     nowMs - new Date(profile.last_spin_at).getTime() >= COOLDOWN_MS;
@@ -289,11 +292,6 @@ export default async function BuyPage() {
           pausedUntil={pausedUntil}
           spendLimitCents={profile?.daily_spend_limit_cents ?? null}
           depositLimitCents={profile?.daily_deposit_limit_cents ?? null}
-          payout={{
-            hasAccount: !!profile?.stripe_connect_id,
-            detailsSubmitted: !!profile?.connect_details_submitted,
-            payoutsEnabled: !!profile?.connect_payouts_enabled,
-          }}
         />
 
         {feed.length > 0 && (

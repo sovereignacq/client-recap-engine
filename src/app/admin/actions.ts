@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRole, isStaff } from "@/lib/roles";
-import { getStripe } from "@/lib/stripe/server";
+import { sendPayout, paypalConfigured } from "@/lib/paypal/server";
 
 const OFFER_STATUSES = [
   "draft",
@@ -25,9 +25,9 @@ const CARD_STATUSES = [
 
 /**
  * Staff: settle a withdrawal request.
- * - "paid": sends the money for real via a Stripe Connect transfer to the
- *   payee's verified connected account, then marks the request paid. The wallet
- *   was already debited (held) at request time, so marking paid only finalizes.
+ * - "paid": sends the money for real via the PayPal Payouts API to the payee's
+ *   PayPal email, then marks the request paid. The wallet was already debited
+ *   (held) at request time, so marking paid only finalizes.
  * - "rejected": refunds the held funds to the user's withdrawable balance.
  */
 export async function adminProcessWithdrawal(
@@ -42,40 +42,33 @@ export async function adminProcessWithdrawal(
   const supabase = await createClient();
 
   if (status === "paid") {
-    // Load the request and payee's connected account.
     const { data: req } = await supabase
       .from("withdrawal_requests")
-      .select("id, user_id, amount_cents, status")
+      .select("id, amount_cents, status, handle")
       .eq("id", id)
       .maybeSingle();
     if (!req) return { error: "Request not found." };
     if (req.status !== "pending") return { error: "Already processed." };
 
-    const { data: payee } = await supabase
-      .from("profiles")
-      .select("stripe_connect_id, connect_payouts_enabled")
-      .eq("id", req.user_id)
-      .maybeSingle();
-    if (!payee?.stripe_connect_id || !payee.connect_payouts_enabled) {
-      return {
-        error: "Payee hasn't finished payout setup (identity not verified yet).",
-      };
+    const email = (req.handle ?? "").trim();
+    if (!email) return { error: "No PayPal email on this request." };
+    if (!paypalConfigured()) {
+      return { error: "PayPal payouts aren't configured (missing API keys)." };
     }
 
-    // Send the payout. Stripe pays out from the connected account's balance to
-    // their bank on its normal schedule once the transfer lands.
-    let transferId: string;
+    // Send the money for real, then finalize.
+    let batchId: string;
     try {
-      const transfer = await getStripe().transfers.create({
-        amount: req.amount_cents,
-        currency: "usd",
-        destination: payee.stripe_connect_id,
-        metadata: { withdrawal_id: req.id, supabase_user_id: req.user_id },
+      const payout = await sendPayout({
+        email,
+        amountCents: req.amount_cents,
+        batchKey: req.id,
+        note: "APEX TCG withdrawal",
       });
-      transferId = transfer.id;
+      batchId = payout.batchId;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Stripe transfer failed.";
-      return { error: `Payout failed: ${msg}` };
+      const msg = e instanceof Error ? e.message : "Payout failed.";
+      return { error: msg };
     }
 
     const { error } = await supabase.rpc("process_withdrawal", {
@@ -86,7 +79,7 @@ export async function adminProcessWithdrawal(
     if (error) return { error: error.message };
     await supabase
       .from("withdrawal_requests")
-      .update({ stripe_transfer_id: transferId })
+      .update({ paypal_payout_batch_id: batchId })
       .eq("id", id);
     revalidatePath("/admin/withdrawals");
     return;

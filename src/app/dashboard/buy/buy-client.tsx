@@ -29,10 +29,6 @@ import {
   type RedeemResult,
   type SpinResult,
 } from "./actions";
-import {
-  startPayoutOnboardingAction,
-  refreshPayoutStatusAction,
-} from "./payout-actions";
 
 export type Bucket = {
   key: string;
@@ -141,7 +137,6 @@ export function BuyClient({
   pausedUntil,
   spendLimitCents,
   depositLimitCents,
-  payout,
 }: {
   tiers: Tier[];
   modes: Mode[];
@@ -169,7 +164,6 @@ export function BuyClient({
   pausedUntil: string | null;
   spendLimitCents: number | null;
   depositLimitCents: number | null;
-  payout: { hasAccount: boolean; detailsSubmitted: boolean; payoutsEnabled: boolean };
 }) {
   const router = useRouter();
   const [isOpening, startOpen] = useTransition();
@@ -220,48 +214,8 @@ export function BuyClient({
   const [isWithdrawing, startWithdraw] = useTransition();
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [wAmount, setWAmount] = useState("");
+  const [wEmail, setWEmail] = useState("");
   const [wMsg, setWMsg] = useState<string | null>(null);
-
-  // Payout setup (Stripe Connect): KYC + bank onboarding state.
-  const [payoutsEnabled, setPayoutsEnabled] = useState(payout.payoutsEnabled);
-  const [payoutStarted, setPayoutStarted] = useState(
-    payout.hasAccount || payout.detailsSubmitted,
-  );
-  const [isPayoutBusy, startPayout] = useTransition();
-
-  const beginPayoutSetup = () =>
-    startPayout(async () => {
-      setWMsg(null);
-      const r = await startPayoutOnboardingAction();
-      if (r.ok) window.location.href = r.url;
-      else setWMsg(r.error);
-    });
-  const refreshPayout = () =>
-    startPayout(async () => {
-      const r = await refreshPayoutStatusAction();
-      if (r.ok) {
-        setPayoutsEnabled(r.payoutsEnabled);
-        setPayoutStarted(r.hasAccount);
-        if (!r.payoutsEnabled)
-          setWMsg("Identity verification is still pending with Stripe.");
-      } else setWMsg(r.error);
-    });
-
-  // Returning from Stripe-hosted onboarding: re-sync verification state.
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search).get("payout");
-    if (p !== "return" && p !== "refresh") return;
-    startPayout(async () => {
-      setShowWithdraw(true);
-      const r = await refreshPayoutStatusAction();
-      if (r.ok) {
-        setPayoutsEnabled(r.payoutsEnabled);
-        setPayoutStarted(r.hasAccount);
-        if (!r.payoutsEnabled)
-          setWMsg("Identity verification is still pending with Stripe.");
-      } else setWMsg(r.error);
-    });
-  }, []);
 
   const submitWithdraw = () => {
     setWMsg(null);
@@ -270,15 +224,20 @@ export function BuyClient({
       setWMsg("Minimum withdrawal is $5.");
       return;
     }
+    const email = wEmail.trim();
+    if (!email.includes("@") || !email.includes(".")) {
+      setWMsg("Enter the PayPal email to send your payout to.");
+      return;
+    }
     startWithdraw(async () => {
-      // Payout goes to the user's verified Connect bank account.
-      const r = await requestWithdrawalAction(cents, "stripe_connect", "");
+      // Payout is sent to the user's PayPal email.
+      const r = await requestWithdrawalAction(cents, "paypal", email);
       if (r.ok) {
         setBalance(r.balance);
         setWithdrawable(r.withdrawable);
         setWAmount("");
         setShowWithdraw(false);
-        setWMsg("Withdrawal requested — we'll send it to your bank shortly.");
+        setWMsg("Withdrawal requested — we'll send it to your PayPal shortly.");
       } else {
         setWMsg(r.error);
       }
@@ -619,15 +578,6 @@ export function BuyClient({
         </p>
       )}
 
-      {/* Fairness promise — every pack returns real value. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border border-emerald-500/30 bg-emerald-50/60 px-4 py-2.5 text-xs text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
-        <span className="font-semibold uppercase tracking-[0.12em]">Fair play</span>
-        <span>Every pack returns a real card worth at least half the price.</span>
-        <span className="text-emerald-700/80 dark:text-emerald-400/80">
-          Most return more — and you can pull above the pack price.
-        </span>
-      </div>
-
       {/* Category columns */}
       <div className="grid grid-cols-2 gap-px border border-black/10 bg-black/10 sm:grid-cols-3 lg:grid-cols-6 dark:border-white/15 dark:bg-white/15">
         {categories.map((c) => {
@@ -737,70 +687,32 @@ export function BuyClient({
           </p>
           <p className="text-xs text-zinc-500">
             Minimum $5. Only deposited funds can be withdrawn — bonus and reward
-            money stays in-app. Payouts go to your verified bank via Stripe.
+            money stays in-app. Payouts are sent to your PayPal.
           </p>
-
-          {payoutsEnabled ? (
-            <>
-              <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                <span>✓</span> Identity verified — payouts go straight to your bank.
-              </p>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <input
-                  value={wAmount}
-                  onChange={(e) => setWAmount(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="Amount (USD)"
-                  className="rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black sm:max-w-[12rem] dark:border-white/20 dark:focus:border-white"
-                />
-                <button
-                  type="button"
-                  disabled={isWithdrawing}
-                  onClick={submitWithdraw}
-                  className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black"
-                >
-                  {isWithdrawing ? "Requesting…" : "Request withdrawal"}
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="space-y-2.5 border border-dashed border-black/20 p-4 dark:border-white/20">
-              <p className="text-sm font-medium">
-                {payoutStarted
-                  ? "Finish verifying your identity to cash out"
-                  : "Set up payouts to cash out"}
-              </p>
-              <p className="text-xs text-zinc-500">
-                To withdraw real cash we verify your identity and link your bank
-                through Stripe (one-time, a couple of minutes). Your winnings stay
-                held until then.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={isPayoutBusy}
-                  onClick={beginPayoutSetup}
-                  className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black"
-                >
-                  {isPayoutBusy
-                    ? "Opening…"
-                    : payoutStarted
-                      ? "Continue verification"
-                      : "Set up payouts"}
-                </button>
-                {payoutStarted && (
-                  <button
-                    type="button"
-                    disabled={isPayoutBusy}
-                    onClick={refreshPayout}
-                    className="rounded-none border border-black/20 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] transition hover:bg-black/5 disabled:opacity-40 dark:border-white/25 dark:hover:bg-white/10"
-                  >
-                    {isPayoutBusy ? "Checking…" : "I've finished — check status"}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              value={wAmount}
+              onChange={(e) => setWAmount(e.target.value)}
+              inputMode="decimal"
+              placeholder="Amount (USD)"
+              className="rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black sm:max-w-[10rem] dark:border-white/20 dark:focus:border-white"
+            />
+            <input
+              value={wEmail}
+              onChange={(e) => setWEmail(e.target.value)}
+              type="email"
+              placeholder="PayPal email"
+              className="flex-1 rounded-none border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black dark:border-white/20 dark:focus:border-white"
+            />
+            <button
+              type="button"
+              disabled={isWithdrawing}
+              onClick={submitWithdraw}
+              className="rounded-none bg-black px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white transition hover:bg-zinc-800 active:scale-95 disabled:opacity-40 dark:bg-white dark:text-black"
+            >
+              {isWithdrawing ? "Requesting…" : "Request payout"}
+            </button>
+          </div>
         </div>
       )}
       {wMsg && (
